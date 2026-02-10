@@ -16,3 +16,11 @@ export type DecrementResponse = {
   postId: string;
   count: number;
 };
+
+export type Round = {
+  id: string;
+  imageUrl: string;
+  answer: 'Delulu' | 'Celulu';
+  celebrityName?: string;
+  used: boolean;
+};

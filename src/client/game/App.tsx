@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useRounds } from '../hooks/useRounds';
 
 type Marker = {
   id: number;
@@ -8,7 +9,15 @@ type Marker = {
   active: boolean;
 };
 
-const ImageCanvas = ({ showGuessUI, isZooming }: { showGuessUI: boolean; isZooming: boolean }) => {
+const ImageCanvas = ({
+  showGuessUI,
+  isZooming,
+  imageUrl,
+}: {
+  showGuessUI: boolean;
+  isZooming: boolean;
+  imageUrl: string;
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLDivElement | null>(null);
 
@@ -484,7 +493,7 @@ const ImageCanvas = ({ showGuessUI, isZooming }: { showGuessUI: boolean; isZoomi
           height: zoomSizePercent !== null ? `${zoomSizePercent}%` : '500%',
           top: '50%',
           left: '50%',
-          backgroundImage: "url('/snoo.png')",
+          backgroundImage: imageUrl ? `url(${imageUrl})` : "url('/snoo.png')",
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
@@ -496,7 +505,7 @@ const ImageCanvas = ({ showGuessUI, isZooming }: { showGuessUI: boolean; isZoomi
       >
         {/* Obstacles (red) and powerups (blue) scattered across the canvas */}
         {markers.map((marker) =>
-          marker.active ? (
+          marker.active && !showGuessUI && !isZooming ? (
             <div
               key={marker.id}
               className={`absolute w-6 h-6 rounded-full border border-white/40 shadow-md flex items-center justify-center text-xs font-bold text-white ${
@@ -515,7 +524,7 @@ const ImageCanvas = ({ showGuessUI, isZooming }: { showGuessUI: boolean; isZoomi
       </div>
 
       {/* Direction arrow */}
-      {!showGuessUI && (
+      {!showGuessUI && !isZooming && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div
             className={`w-10 h-10 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm border-2 transition-transform duration-300 ease-out transition-colors transition-shadow transition-opacity ${
@@ -550,9 +559,15 @@ const ImageCanvas = ({ showGuessUI, isZooming }: { showGuessUI: boolean; isZoomi
 };
 
 export const App = () => {
+  const { rounds, loading, error, currentRound } = useRounds();
+  const roundImageUrl = currentRound?.imageUrl ?? '';
   const [score, setScore] = useState(100_000);
   const [showGuessUI, setShowGuessUI] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
+
+  const handleGuessButtonClick = () => {
+    setShowGuessUI(true);
+  };
 
   const handleGuess = () => {
     setShowGuessUI(false);
@@ -561,7 +576,7 @@ export const App = () => {
 
   useEffect(() => {
     // Stop score timer when guess button is pressed
-    if (showGuessUI) return;
+    if (showGuessUI || isZooming) return;
 
     let animationId: number | null = null;
     let lastTime = performance.now();
@@ -590,7 +605,10 @@ export const App = () => {
   const roundedScore = Math.floor(score);
 
   return (
-    <div className="flex flex-col min-h-screen bg-black text-white">
+    <div
+      className="flex flex-col min-h-screen bg-black text-white"
+      style={{ fontFamily: "'Quicksand', sans-serif" }}
+    >
       {/* Top bar: score only */}
       <header className="px-4 py-3 flex items-center justify-center">
         <div className="flex flex-col items-center">
@@ -601,9 +619,31 @@ export const App = () => {
         </div>
       </header>
 
+      {/* Reveal message: between score and canvas */}
+      {isZooming && (
+        <div className="px-4 py-2 flex justify-center">
+          <p className="text-center text-lg font-medium text-white max-w-md">
+            Congrats! It&apos;s a Celulu! (You&apos;re not Delulu)
+          </p>
+        </div>
+      )}
+
       {/* Main image canvas */}
       <main className="flex-1 flex items-center justify-center px-4 pb-4 relative">
-        <ImageCanvas showGuessUI={showGuessUI} isZooming={isZooming} />
+        {loading && (
+          <p className="text-center text-sm text-gray-400 px-4">Loading round...</p>
+        )}
+        {error && !loading && (
+          <p className="text-center text-sm text-amber-400 px-4">Could not load round: {error}</p>
+        )}
+        {!loading && !error && rounds.length === 0 && (
+          <p className="text-center text-sm text-gray-400 px-4">No rounds yet. Mods can add one via the menu.</p>
+        )}
+        <ImageCanvas
+          showGuessUI={showGuessUI}
+          isZooming={isZooming}
+          imageUrl={roundImageUrl}
+        />
         
         {/* Guess UI overlay */}
         {showGuessUI && !isZooming && (
@@ -630,10 +670,10 @@ export const App = () => {
       </main>
 
       {/* Bottom fixed answer button */}
-      {!showGuessUI && (
+      {!showGuessUI && !isZooming && (
         <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
           <button
-            onClick={() => setShowGuessUI(true)}
+            onClick={handleGuessButtonClick}
             className="w-full h-12 rounded-full bg-[#d93900] text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
           >
             Guess: Altered or Original
