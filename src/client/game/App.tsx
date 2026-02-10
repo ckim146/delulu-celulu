@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { useRounds } from '../hooks/useRounds';
+
+type InitResponse = { type: 'init'; levelName: string; levelData: string; username: string };
+
+type LevelData = {
+  levelName: string;
+  imageUrl: string;
+  answer: string | null;
+  celebrityName: string | null;
+};
 
 type Marker = {
   id: number;
@@ -31,10 +39,11 @@ const ImageCanvas = ({
   const initialZoomStateRef = useRef<{ offset: { x: number; y: number }; sizePercent: number } | null>(null);
   const [zoomSizePercent, setZoomSizePercent] = useState<number | null>(null);
   const zoomCompletedRef = useRef(false);
+
   const [markers, setMarkers] = useState<Marker[]>(() => {
     const items: Marker[] = [];
     const count = 10;
-    const minDistance = 5; // minimum distance in percentage units of the larger dimension
+    const minDistance = 5;
 
     const isFarEnough = (x: number, y: number, existing: Marker[]) => {
       for (const m of existing) {
@@ -484,7 +493,7 @@ const ImageCanvas = ({
       onPointerLeave={isZooming ? undefined : handlePointerLeave}
       style={{ pointerEvents: isZooming ? 'none' : 'auto' }}
     >
-      {/* Oversized image to allow panning */}
+      {/* Oversized image to allow panning — image from init (levelData) loaded here */}
       <div
         ref={imageRef}
         className="absolute select-none transition-opacity duration-300"
@@ -493,16 +502,28 @@ const ImageCanvas = ({
           height: zoomSizePercent !== null ? `${zoomSizePercent}%` : '500%',
           top: '50%',
           left: '50%',
-          backgroundImage: imageUrl ? `url(${imageUrl})` : "url('/snoo.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
           transform: `translate(-50%, -50%) translate3d(${offset.x}px, ${offset.y}px, 0)`,
           willChange: 'transform, width, height',
-          opacity: showGuessUI && !isZooming ? 0.3 : 1,
-          transition: isZooming ? 'none' : undefined, // Disable transition during animation for smooth frame-by-frame updates
+          transition: isZooming ? 'none' : undefined,
         }}
       >
+        {/* Canvas image: loaded from init levelData when present, else fallback */}
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover object-center select-none"
+            style={{
+              opacity: showGuessUI && !isZooming ? 0.3 : 1,
+            }}
+            draggable={false}
+          />
+        ) : (
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: "url('/snoo.png')" }}
+          />
+        )}
         {/* Obstacles (red) and powerups (blue) scattered across the canvas */}
         {markers.map((marker) =>
           marker.active && !showGuessUI && !isZooming ? (
@@ -559,8 +580,167 @@ const ImageCanvas = ({
 };
 
 export const App = () => {
-  const { rounds, loading, error, currentRound } = useRounds();
-  const roundImageUrl = currentRound?.imageUrl ?? '';
+  const [initState, setInitState] = useState<{
+    levelName: string | null;
+    levelData: string | null;
+    username: string | null;
+    loading: boolean;
+    error: boolean;
+  }>({
+    levelName: null,
+    levelData: null,
+    username: null,
+    loading: true,
+    error: false,
+  });
+
+  const [levelState, setLevelState] = useState<{
+    level: LevelData | null;
+    loading: boolean;
+    error: boolean;
+  }>({
+    level: null,
+    loading: true,
+    error: false,
+  });
+
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const res = await fetch('/api/init');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: InitResponse = await res.json();
+        if (data.type !== 'init') throw new Error('Unexpected response');
+        setInitState({
+          levelName: data.levelName,
+          levelData: data.levelData,
+          username: data.username,
+          loading: false,
+          error: false,
+        });
+      } catch (err) {
+        console.error('Failed to init', err);
+        setInitState((prev) => ({ ...prev, loading: false, error: true }));
+      }
+    };
+    void init();
+  }, []);
+
+  useEffect(() => {
+    const loadLatestLevel = async () => {
+      setLevelState((prev) => ({ ...prev, loading: true, error: false }));
+      try {
+        const res = await fetch('/api/levels');
+        const data = await res.json().catch(() => ({}));
+        const raw = data.level ?? null;
+        if (raw && typeof raw.levelName === 'string' && typeof raw.imageUrl === 'string') {
+          setLevelState({
+            level: {
+              levelName: raw.levelName,
+              imageUrl: raw.imageUrl,
+              answer: raw.answer ?? null,
+              celebrityName: raw.celebrityName ?? null,
+            },
+            loading: false,
+            error: false,
+          });
+        } else {
+          setLevelState({ level: null, loading: false, error: false });
+        }
+      } catch (err) {
+        console.error('Failed to fetch latest level:', err);
+        setLevelState((prev) => ({ ...prev, level: null, loading: false, error: true }));
+      }
+    };
+    void loadLatestLevel();
+  }, []);
+
+  const { levelData, loading: initLoading, error: initError } = initState;
+  const { level, loading: levelLoading, error: levelError } = levelState;
+  const rawImageUrl = level?.imageUrl ?? levelData ?? '';
+
+  // CSP connect-src only allows: 'self', webview.devvit.net, *.redd.it, *.redditmedia.com, *.redditstatic.com, blob:
+  // So we cannot fetch() external URLs (e.g. Wikipedia). Only Reddit URLs work for direct use or client fetch.
+  const isHttpUrl = Boolean(rawImageUrl && /^https?:\/\//i.test(rawImageUrl));
+  const isAssetName = Boolean(rawImageUrl && !/^https?:\/\//i.test(rawImageUrl));
+  const isCspAllowedOrigin = (url: string) => {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      return (
+        host.endsWith('.redd.it') ||
+        host.endsWith('.redditmedia.com') ||
+        host.endsWith('.redditstatic.com')
+      );
+    } catch {
+      return false;
+    }
+  };
+  const useDirectUrl = isHttpUrl && isCspAllowedOrigin(rawImageUrl);
+  const blockedByCsp = isHttpUrl && !isCspAllowedOrigin(rawImageUrl);
+
+  type ImageLoadError = { code: string; status?: number; message?: string };
+  const [resolvedImageUrl, setResolvedImageUrl] = useState('');
+  const [imageLoadError, setImageLoadError] = useState<ImageLoadError | null>(null);
+  useEffect(() => {
+    if (useDirectUrl) {
+      setResolvedImageUrl(rawImageUrl);
+      setImageLoadError(null);
+      return;
+    }
+    if (blockedByCsp) {
+      setResolvedImageUrl('');
+      setImageLoadError({
+        code: 'csp_connect_src',
+        message: "This domain isn't allowed by the app's security policy (connect-src). Use a Reddit image URL or add the image to assets.",
+      });
+      return;
+    }
+    if (isAssetName) {
+      setResolvedImageUrl('');
+      setImageLoadError(null);
+      let cancelled = false;
+      fetch(`/api/asset-url?name=${encodeURIComponent(rawImageUrl)}`, { credentials: 'include' })
+        .then((res) => {
+          if (!res.ok) {
+            if (!cancelled) setImageLoadError({ code: 'asset_http', status: res.status, message: res.statusText });
+            return Promise.reject(new Error('Asset not found'));
+          }
+          return res.json();
+        })
+        .then((data: { url?: string }) => {
+          if (!cancelled && data.url) {
+            setResolvedImageUrl(data.url);
+            setImageLoadError(null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setResolvedImageUrl('');
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setResolvedImageUrl(rawImageUrl);
+    setImageLoadError(null);
+  }, [rawImageUrl, useDirectUrl, blockedByCsp, isAssetName]);
+
+  const imageUrl = useDirectUrl
+    ? rawImageUrl
+    : isAssetName
+      ? resolvedImageUrl
+      : rawImageUrl;
+  const showExternalUrlMessage = blockedByCsp || (imageLoadError != null && isHttpUrl && !useDirectUrl);
+  const errorDetail =
+    imageLoadError?.code === 'http' && imageLoadError.status != null
+      ? `HTTP ${imageLoadError.status}${imageLoadError.message ? `: ${imageLoadError.message}` : ''}`
+      : imageLoadError?.code === 'csp_connect_src'
+        ? "Domain blocked by security policy (connect-src). Use a Reddit image URL (i.redd.it, redditmedia.com) or add the image to the assets folder."
+        : imageLoadError?.code === 'network_or_cors'
+          ? 'Network error or CORS blocked (try a Reddit image URL or assets)'
+          : imageLoadError?.message ?? imageLoadError?.code ?? null;
+  const loading = initLoading || levelLoading;
+  const error = initError || levelError;
+
   const [score, setScore] = useState(100_000);
   const [showGuessUI, setShowGuessUI] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
@@ -631,18 +811,29 @@ export const App = () => {
       {/* Main image canvas */}
       <main className="flex-1 flex items-center justify-center px-4 pb-4 relative">
         {loading && (
-          <p className="text-center text-sm text-gray-400 px-4">Loading round...</p>
+          <p className="text-center text-sm text-gray-400 px-4">Loading...</p>
         )}
         {error && !loading && (
-          <p className="text-center text-sm text-amber-400 px-4">Could not load round: {error}</p>
+          <p className="text-center text-sm text-amber-400 px-4">Could not load: init failed</p>
         )}
-        {!loading && !error && rounds.length === 0 && (
-          <p className="text-center text-sm text-gray-400 px-4">No rounds yet. Mods can add one via the menu.</p>
+        {showExternalUrlMessage && !loading && (
+          <div className="text-center text-sm text-amber-400/90 px-4 absolute top-12 left-4 right-4 z-10 space-y-1">
+            <p>
+              {errorDetail ? (
+                <>Image failed: <strong>{errorDetail}</strong></>
+              ) : (
+                <>Loading image…</>
+              )}
+            </p>
+            <p className="text-amber-400/70 text-xs">
+              Use a <strong>Reddit image URL</strong> (i.redd.it, redditmedia.com) or add the image to <strong>assets</strong> and use its filename.
+            </p>
+          </div>
         )}
         <ImageCanvas
           showGuessUI={showGuessUI}
           isZooming={isZooming}
-          imageUrl={roundImageUrl}
+          imageUrl={imageUrl}
         />
         
         {/* Guess UI overlay */}

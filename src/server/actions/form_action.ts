@@ -1,68 +1,55 @@
 /*
- * Handles submission of the createRoundForm (image, answer, celebrity name).
- * Form endpoint is defined in devvit.json: "createRoundForm": "/internal/menu/round-submit"
+ * Registers an action when the form in the menu action is submitted. This form endpoint is defined in the devvit.json.
+ * See https://developers.reddit.com/docs/capabilities/client/forms
+ *
+ * u/beach-brews
  */
 
 import { Router } from 'express';
 import { redis } from '@devvit/web/server';
 import { Logger } from '../utils/logger';
 
-export const ROUNDS_HASH_KEY = 'delulu:rounds';
-
 export const formAction = (router: Router): void => {
   router.post(
-    '/internal/menu/round-submit',
+    '/internal/form/create-game-form',
     async (req, res): Promise<void> => {
-      const logger = await Logger.Create('Form - Round Submit');
-      logger.traceStart('Round Submit');
+      // Create a logger
+      const logger = await Logger.Create('Form - Create Game');
+      logger.traceStart('Form Action');
 
       try {
-        const { imageUrl, answer, celebrityName } = req.body ?? {};
 
-        if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.trim()) {
-          res.status(400).json({
-            status: 'error',
-            message: 'Image URL is required',
-          });
-          return;
-        }
+        /* ========== Start Focus - Queue level data ========== */
 
-        if (!answer || (answer !== 'Delulu' && answer !== 'Celulu')) {
-          res.status(400).json({
-            status: 'error',
-            message: 'Answer must be Delulu or Celulu',
-          });
-          return;
-        }
+        // Level data can be provided many different ways, along with different methods of creating new posts
+        // (manually vs. periodically). As an example, this action adds the provided data to a queue for processing by
+        // a scheduled action. Be sure to check out the notes in 3_scheduledAction.ts!
 
-        const round = {
-          imageUrl: imageUrl.trim(),
-          answer,
-          celebrityName: typeof celebrityName === 'string' ? celebrityName.trim() || undefined : undefined,
-          used: false,
-        };
+        // Obtain levelName and gameData from form
+        const { levelName, imageUrl, answer, celebrityName } = req.body;
+        logger.info(`Form action triggered. Saving ${levelName} and ${imageUrl} to processing queue.`);
 
-        const roundId = Date.now().toString();
-        const roundJson = JSON.stringify(round);
-        await redis.hSet(ROUNDS_HASH_KEY, { [roundId]: roundJson });
+        // Stores provided level data into Redis hash.
+        await redis.hSet('data:queue', { [levelName]: imageUrl, answer, celebrityName });
 
-        logger.info(`Round queued: answer=${answer}, celebrityName=${round.celebrityName ?? '(none)'}`);
-
+        // Display success to user
         res.status(200).json({
           showToast: {
             appearance: 'success',
-            text: 'Round saved successfully',
-          },
+            text: 'Successfully queued game data'
+          }
         });
+
+        /* ========== End Focus - Queue level data ========== */
+
       } catch (error) {
-        logger.error('Error in round submit:', error);
+        logger.error('Error in form action:', error);
         res.status(400).json({
           status: 'error',
-          message: 'Failed to save round',
+          message: 'Form action failed'
         });
       } finally {
         logger.traceEnd();
       }
-    }
-  );
-};
+    });
+}

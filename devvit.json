@@ -11,7 +11,7 @@
   "server": { "dir": "dist/server", "entry": "index.cjs" },
   "media": { "dir": "assets" },
   "forms": {
-    "createRoundForm": "/internal/menu/round-submit"
+    "createGameForm": "/internal/form/create-game-form"
   },
   "menu": {
     "items": [
@@ -23,8 +23,8 @@
         "endpoint": "/internal/menu/post-create"
       },
       {
-        "label": "Add round (image + answer)",
-        "description": "Upload an image, set Delulu/Celulu, and optional celebrity name",
+        "label": "Add level",
+        "description": "Provide level name and game data for the game",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/provide-data"

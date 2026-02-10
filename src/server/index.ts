@@ -1,9 +1,11 @@
 import express from 'express';
-import { InitResponse, IncrementResponse, DecrementResponse } from '../shared/types/api';
-import { redis, reddit, createServer, context, getServerPort } from '@devvit/web/server';
-import { createPost } from './core/post';
+import { context, createServer, getServerPort, redis } from '@devvit/web/server';
+
+/* ========== Start Focus - Import action files ========== */
 import { menuAction } from './actions/menu_action';
-import { formAction, ROUNDS_HASH_KEY } from './actions/form_action';
+import { formAction } from './actions/form_action';
+import { initGameAction } from './actions/init_game_action';
+/* ========== End Focus - Import action files ========== */
 
 const app = express();
 
@@ -16,192 +18,88 @@ app.use(express.text());
 
 const router = express.Router();
 
-router.get<{ postId: string }, InitResponse | { status: string; message: string }>(
-  '/api/init',
-  async (_req, res): Promise<void> => {
-    const { postId } = context;
-
-    if (!postId) {
-      console.error('API Init Error: postId not found in devvit context');
-      res.status(400).json({
-        status: 'error',
-        message: 'postId is required but missing from context',
-      });
-      return;
-    }
-
-    try {
-      const [count, username] = await Promise.all([
-        redis.get('count'),
-        reddit.getCurrentUsername(),
-      ]);
-
-      res.json({
-        type: 'init',
-        postId: postId,
-        count: count ? parseInt(count) : 0,
-        username: username ?? 'anonymous',
-      });
-    } catch (error) {
-      console.error(`API Init Error for post ${postId}:`, error);
-      let errorMessage = 'Unknown error during initialization';
-      if (error instanceof Error) {
-        errorMessage = `Initialization failed: ${error.message}`;
-      }
-      res.status(400).json({ status: 'error', message: errorMessage });
-    }
-  }
-);
-
-router.post<{ postId: string }, IncrementResponse | { status: string; message: string }, unknown>(
-  '/api/increment',
-  async (_req, res): Promise<void> => {
-    const { postId } = context;
-    if (!postId) {
-      res.status(400).json({
-        status: 'error',
-        message: 'postId is required',
-      });
-      return;
-    }
-
-    res.json({
-      count: await redis.incrBy('count', 1),
-      postId,
-      type: 'increment',
-    });
-  }
-);
-
-router.post<{ postId: string }, DecrementResponse | { status: string; message: string }, unknown>(
-  '/api/decrement',
-  async (_req, res): Promise<void> => {
-    const { postId } = context;
-    if (!postId) {
-      res.status(400).json({
-        status: 'error',
-        message: 'postId is required',
-      });
-      return;
-    }
-
-    res.json({
-      count: await redis.incrBy('count', -1),
-      postId,
-      type: 'decrement',
-    });
-  }
-);
-
-function parseRound(id: string, json: string): { id: string; imageUrl: string; answer: string; celebrityName?: string; used: boolean } | null {
-  try {
-    const { imageUrl, answer, celebrityName, used } = JSON.parse(json);
-    return { id, imageUrl, answer, celebrityName, used: used === true };
-  } catch {
-    return null;
-  }
-}
-
-function todayKey(): string {
-  const now = new Date();
-  const y = now.getUTCFullYear();
-  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(now.getUTCDate()).padStart(2, '0');
-  return `delulu:today:${y}-${m}-${d}`;
-}
-
-router.get('/api/round', async (_req, res): Promise<void> => {
-  try {
-    const dateKey = todayKey();
-    const existingId = await redis.get(dateKey);
-    const raw = await redis.hGetAll(ROUNDS_HASH_KEY);
-    const entries = Object.entries(raw ?? {});
-
-    console.log('[api/round] dateKey:', dateKey, 'existingId:', existingId, 'raw keys:', raw ? Object.keys(raw) : [], 'entries count:', entries.length);
-
-    const parsedRounds = entries.map(([id, json]) => parseRound(id, json));
-    console.log('[api/round] parsed rounds:', parsedRounds);
-
-    if (existingId && raw?.[existingId]) {
-      const round = parseRound(existingId, raw[existingId]);
-      if (round) {
-        res.json({ round });
-        return;
-      }
-    }
-
-    const allRounds = parsedRounds.filter((r): r is NonNullable<typeof r> => r != null && !r.used);
-
-    if (allRounds.length === 0) {
-      res.status(200).json({
-        round: null,
-        message: 'No unused rounds available',
-        debug: { totalInRedis: parsedRounds.length, dateKey },
-      });
-      return;
-    }
-
-    const chosen = allRounds[Math.floor(Math.random() * allRounds.length)]!;
-    await redis.set(dateKey, chosen.id);
-
-    const updated = { ...chosen, used: true };
-    await redis.hSet(ROUNDS_HASH_KEY, { [chosen.id]: JSON.stringify({ imageUrl: chosen.imageUrl, answer: chosen.answer, celebrityName: chosen.celebrityName, used: true }) });
-
-    res.json({ round: updated });
-  } catch (error) {
-    console.error('Error fetching today round:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to load round' });
-  }
-});
-
-router.get('/api/rounds', async (_req, res): Promise<void> => {
-  try {
-    const raw = await redis.hGetAll(ROUNDS_HASH_KEY);
-    const rounds = Object.entries(raw ?? {}).map(([id, json]) => parseRound(id, json)).filter((r): r is NonNullable<typeof r> => r != null);
-    res.json(rounds);
-  } catch (error) {
-    console.error('Error fetching rounds:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to load rounds' });
-  }
-});
-
-router.post('/internal/on-app-install', async (_req, res): Promise<void> => {
-  try {
-    const post = await createPost();
-
-    res.json({
-      status: 'success',
-      message: `Post created in subreddit ${context.subredditName} with id ${post.id}`,
-    });
-  } catch (error) {
-    console.error(`Error creating post: ${error}`);
-    res.status(400).json({
-      status: 'error',
-      message: 'Failed to create post',
-    });
-  }
-});
-
-router.post('/internal/menu/post-create', async (_req, res): Promise<void> => {
-  try {
-    const post = await createPost();
-
-    res.json({
-      navigateTo: `https://reddit.com/r/${context.subredditName}/comments/${post.id}`,
-    });
-  } catch (error) {
-    console.error(`Error creating post: ${error}`);
-    res.status(400).json({
-      status: 'error',
-      message: 'Failed to create post',
-    });
-  }
-});
-
-// Menu: show round-creation form (image, answer, celebrity name)
+/* ========== Start Focus - Register game actions ========== */
 menuAction(router);
-// Form: handle round-submit (persist to Redis, show toast)
 formAction(router);
+initGameAction(router);
+
+// GET /api/asset-url?name=<assetName> — get Reddit-hosted URL for an image in assets/ (CSP-safe, no proxy)
+router.get('/api/asset-url', (req, res) => {
+  const name = req.query.name;
+  if (typeof name !== 'string' || !name.trim()) {
+    res.status(400).json({ error: 'Missing or invalid name query' });
+    return;
+  }
+  try {
+    const assets = (context as { assets?: { getURL: (n: string) => string } }).assets;
+    const url = assets?.getURL(name.trim());
+    if (!url) {
+      res.status(404).json({ error: 'Asset not found or assets not available' });
+      return;
+    }
+    res.json({ url });
+  } catch (err) {
+    console.error('Asset URL error:', err);
+    res.status(500).json({ error: 'Failed to get asset URL' });
+  }
+});
+
+// GET /api/proxy-image?url=<encoded-url> — proxy external images to satisfy CSP (img-src)
+router.get('/api/proxy-image', async (req, res) => {
+  const rawUrl = req.query.url;
+  if (typeof rawUrl !== 'string' || !rawUrl.startsWith('http')) {
+    res.status(400).send('Missing or invalid url query');
+    return;
+  }
+  try {
+    const response = await fetch(rawUrl, {
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DevvitImageProxy/1.0)',
+        Accept: 'image/*,*/*',
+      },
+    });
+    if (!response.ok) {
+      console.error('Proxy image upstream status:', response.status, rawUrl);
+      res.status(response.status).send('Upstream image failed');
+      return;
+    }
+    const contentType = response.headers.get('content-type') ?? 'image/jpeg';
+    const buffer = Buffer.from(await response.arrayBuffer());
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('Content-Type', contentType);
+    res.send(buffer);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Proxy image error:', message, rawUrl);
+    res.status(502).send('Failed to fetch image');
+  }
+});
+
+// GET /api/levels — return only the latest level from queue (all its data)
+router.get('/api/levels', async (_req, res) => {
+  try {
+    const queued = await redis.hGetAll('data:queue');
+    const levelEntries = Object.entries(queued).filter(
+      ([key]) => key !== 'answer' && key !== 'celebrityName'
+    );
+    const latestEntry = levelEntries.length > 0 ? levelEntries[levelEntries.length - 1] : null;
+    const level = latestEntry
+      ? {
+          levelName: latestEntry[0],
+          imageUrl: latestEntry[1],
+          answer: queued['answer'] ?? null,
+          celebrityName: queued['celebrityName'] ?? null,
+        }
+      : null;
+    res.json({ level });
+  } catch (err) {
+    console.error('GET /api/levels error:', err);
+    res.status(500).json({ level: null });
+  }
+});
+
+/* ========== End Focus - Register game actions ========== */
 
 // Use router middleware
 app.use(router);
