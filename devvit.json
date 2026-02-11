@@ -11,7 +11,8 @@
   "server": { "dir": "dist/server", "entry": "index.cjs" },
   "media": { "dir": "assets" },
   "forms": {
-    "createGameForm": "/internal/form/create-game-form"
+    "createGameForm": "/internal/form/create-game-form",
+    "deleteLevelForm": "/internal/form/delete-level"
   },
   "menu": {
     "items": [
@@ -28,6 +29,13 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/provide-data"
+      },
+      {
+        "label": "Manage levels",
+        "description": "View and delete levels in the queue",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/manage-levels"
       }
     ]
   },

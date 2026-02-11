@@ -6,9 +6,91 @@
  */
 
 import { Router } from 'express';
-import { Logger } from '../utils/logger';
+import { redis } from '@devvit/web/server';
+import { Logger } from '../utils/Logger';
+
+const QUEUE_KEY = 'data:queue';
+const PENDING_DELETE_KEY = 'delulu:pending-delete';
+const META_KEYS = ['answer', 'celebrityName'];
 
 export const menuAction = (router: Router): void => {
+  router.post(
+    '/internal/menu/manage-levels',
+    async (_req, res): Promise<void> => {
+      const logger = await Logger.Create('Menu - Manage Levels');
+      logger.traceStart('Menu Action');
+      try {
+        let raw = await redis.hGetAll(QUEUE_KEY);
+        const pendingRaw = await redis.get(PENDING_DELETE_KEY);
+        const pendingLevelName =
+          typeof pendingRaw === 'string' && pendingRaw.length > 0 ? pendingRaw : null;
+        if (pendingLevelName) {
+          const rest: Record<string, string> = {};
+          for (const [k, v] of Object.entries(raw)) {
+            if (k === pendingLevelName) continue;
+            const s = typeof v === 'string' ? v : typeof v === 'number' ? String(v) : null;
+            if (s != null) rest[k] = s;
+          }
+          await redis.del(QUEUE_KEY);
+          if (Object.keys(rest).length > 0) await redis.hSet(QUEUE_KEY, rest);
+          await redis.del(PENDING_DELETE_KEY);
+          raw = await redis.hGetAll(QUEUE_KEY);
+        }
+        const answer = (typeof raw['answer'] === 'string' ? raw['answer'] : null) ?? '';
+        const celebrityName = (typeof raw['celebrityName'] === 'string' ? raw['celebrityName'] : null) ?? '';
+        const levelEntries = Object.entries(raw).filter(
+          ([key]) => !META_KEYS.includes(key)
+        );
+        const options = levelEntries.map(([levelName, imageUrl]) => ({
+          value: levelName,
+          label: `${levelName}${celebrityName ? ` — ${celebrityName}` : ''}`,
+        }));
+        if (options.length === 0) {
+          res.json({
+            showForm: {
+              name: 'deleteLevelForm',
+              form: {
+                fields: [
+                  {
+                    type: 'string',
+                    name: 'levelName',
+                    label: 'Level to delete',
+                    helpText: 'No levels in the queue. Add levels with "Add level" first.',
+                  },
+                ],
+              },
+            },
+          });
+          return;
+        }
+        res.json({
+          showForm: {
+            name: 'deleteLevelForm',
+            form: {
+              fields: [
+                {
+                  type: 'select',
+                  name: 'levelName',
+                  label: 'Level to delete',
+                  helpText: 'Select a level to remove from the queue, then submit.',
+                  options,
+                },
+              ],
+            },
+          },
+        });
+      } catch (error) {
+        logger.error('Error in manage-levels menu:', error);
+        res.status(400).json({
+          status: 'error',
+          message: 'Manage levels failed',
+        });
+      } finally {
+        logger.traceEnd();
+      }
+    }
+  );
+
   router.post(
     '/internal/menu/provide-data',
     async (_req, res): Promise<void> => {

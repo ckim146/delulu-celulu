@@ -6,7 +6,7 @@
 
 import { Router } from 'express';
 import { context, reddit, redis } from '@devvit/web/server';
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/Logger';
 
 export const initGameAction = (router: Router): void => {
   router.get(

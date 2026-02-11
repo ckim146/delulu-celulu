@@ -1,13 +1,13 @@
 /*
  * Registers an action that is called by the Devvit scheduler. This schedule is defined in the devvit.json.
  * See https://developers.reddit.com/docs/capabilities/server/scheduler
- *
- * u/beach-brews
+ * Original code from u/beach-brews
+ * Adapted for delulu-celulu
  */
 
 import { Router } from 'express';
 import { context, reddit, redis } from '@devvit/web/server';
-import { Logger } from '../utils/logger';
+import { Logger } from '../utils/Logger';
 
 export const scheduledAction = (router: Router): void => {
   router.post(
@@ -69,7 +69,7 @@ export const scheduledAction = (router: Router): void => {
             splash: {
               appDisplayName: 'Level ' + levelName,
               heading: 'Level ' + levelName,
-              description: 'Can you solve this level?',
+              description: 'Did you test to see if you are Delulu today?',
               backgroundUri: 'default-splash.png',
               buttonLabel: 'Tap to Start',
               appIconUri: 'default-icon.png'
