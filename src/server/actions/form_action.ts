@@ -85,6 +85,7 @@ console.log('Redis result:', result);
           const raw = await redis.hGetAll(QUEUE_KEY);
           console.log('[create-post] raw', raw);
           const imageUrl = raw[levelName];
+          console.log('[create-post] imageUrl', imageUrl);
           const gameData =
             typeof imageUrl === 'string' ? imageUrl : typeof imageUrl === 'number' ? String(imageUrl) : null;
           if (!gameData) {

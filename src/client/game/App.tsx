@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { APP_THEME } from '../theme';
 
-type InitResponse = { type: 'init'; levelName: string; levelData: string; username: string };
+type InitResponse = {
+  type: 'init';
+  levelName: string;
+  levelData: string;
+  username: string;
+  answer?: string;
+  celebrityName?: string;
+};
 
 type LevelData = {
   levelName: string;
@@ -600,12 +607,16 @@ export const App = () => {
     levelName: string | null;
     levelData: string | null;
     username: string | null;
+    answer: string | null;
+    celebrityName: string | null;
     loading: boolean;
     error: boolean;
   }>({
     levelName: null,
     levelData: null,
     username: null,
+    answer: null,
+    celebrityName: null,
     loading: true,
     error: false,
   });
@@ -631,6 +642,8 @@ export const App = () => {
           levelName: data.levelName,
           levelData: data.levelData,
           username: data.username,
+          answer: typeof data.answer === 'string' ? data.answer : null,
+          celebrityName: typeof data.celebrityName === 'string' ? data.celebrityName : null,
           loading: false,
           error: false,
         });
@@ -642,7 +655,17 @@ export const App = () => {
     void init();
   }, []);
 
+  // Only fetch /api/levels when init did not return level data (e.g. post created without a level).
+  // For manually created game posts, we use init (postData) only.
   useEffect(() => {
+    console.log("app loading");
+    if (initState.loading) return;
+    console.log('[App] initState.loading', initState);
+    if (initState.levelData) {
+      console.log('[App] initState.levelData', initState.levelData);
+      setLevelState({ level: null, loading: false, error: false });
+      return;
+    }
     const loadLatestLevel = async () => {
       setLevelState((prev) => ({ ...prev, loading: true, error: false }));
       try {
@@ -669,11 +692,12 @@ export const App = () => {
       }
     };
     void loadLatestLevel();
-  }, []);
+  }, [initState.loading, initState.levelData]);
 
-  const { levelData, loading: initLoading, error: initError } = initState;
+  const { levelData, answer: initAnswer, loading: initLoading, error: initError } = initState;
   const { level, loading: levelLoading, error: levelError } = levelState;
-  const rawImageUrl = level?.imageUrl ?? levelData ?? '';
+  // Prefer init (postData) when this post was created with a level; fall back to /api/levels only when init has no levelData.
+  const rawImageUrl = initState.levelData ? initState.levelData : (level?.imageUrl ?? levelData ?? '');
 
   // CSP connect-src only allows: 'self', webview.devvit.net, *.redd.it, *.redditmedia.com, *.redditstatic.com, blob:
   // So we cannot fetch() external URLs (e.g. Wikipedia). Only Reddit URLs work for direct use or client fetch.
@@ -773,7 +797,9 @@ export const App = () => {
     setIsZooming(true);
   };
 
-  const correctAnswer = level?.answer === 'Delulu' || level?.answer === 'Celulu' ? level.answer : null;
+  const answerFromInit = initAnswer === 'Delulu' || initAnswer === 'Celulu' ? initAnswer : null;
+  const answerFromLevel = level?.answer === 'Delulu' || level?.answer === 'Celulu' ? level.answer : null;
+  const correctAnswer = initState.levelData ? answerFromInit : answerFromLevel;
   const gotItCorrect = userGuess !== null && correctAnswer !== null && userGuess === correctAnswer;
   const revealMessage =
     correctAnswer != null && userGuess != null
