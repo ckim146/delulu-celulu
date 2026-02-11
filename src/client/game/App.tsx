@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { APP_THEME } from '../theme';
 
 type InitResponse = { type: 'init'; levelName: string; levelData: string; username: string };
 
@@ -7,6 +8,17 @@ type LevelData = {
   imageUrl: string;
   answer: string | null;
   celebrityName: string | null;
+};
+
+const REVEAL_MESSAGES: Record<'Delulu' | 'Celulu', { correct: string; incorrect: string }> = {
+  Delulu: {
+    correct: "Correct! You are Delulu, that's not a Celulu!",
+    incorrect: "Uh oh... looks like you were Delulu, it wasn't a Celulu!",
+  },
+  Celulu: {
+    correct: "Correct! It's a Celulu! You're not Delulu.",
+    incorrect: "Oops, you weren't Delulu. It was a Celulu!",
+  },
 };
 
 type Marker = {
@@ -21,10 +33,12 @@ const ImageCanvas = ({
   showGuessUI,
   isZooming,
   imageUrl,
+  onMarkerHit,
 }: {
   showGuessUI: boolean;
   isZooming: boolean;
   imageUrl: string;
+  onMarkerHit?: (type: 'obstacle' | 'powerup') => void;
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLDivElement | null>(null);
@@ -39,6 +53,7 @@ const ImageCanvas = ({
   const initialZoomStateRef = useRef<{ offset: { x: number; y: number }; sizePercent: number } | null>(null);
   const [zoomSizePercent, setZoomSizePercent] = useState<number | null>(null);
   const zoomCompletedRef = useRef(false);
+  const ZOOM_PERCENT = 600;
 
   const [markers, setMarkers] = useState<Marker[]>(() => {
     const items: Marker[] = [];
@@ -69,7 +84,7 @@ const ImageCanvas = ({
         id: items.length,
         x,
         y,
-        type: items.length % 2 === 0 ? 'obstacle' : 'powerup',
+        type: items.length % 5 < 2 ? 'obstacle' : 'powerup',
         active: true,
       });
     }
@@ -186,6 +201,7 @@ const ImageCanvas = ({
       if (hitType) {
         // Visual feedback
         triggerHitGlow(hitType);
+        onMarkerHit?.(hitType);
 
         // Modify velocity based on marker type
         let { vx, vy } = velocityRef.current;
@@ -257,9 +273,9 @@ const ImageCanvas = ({
     if (initialZoomStateRef.current === null) {
       initialZoomStateRef.current = {
         offset: { ...offset },
-        sizePercent: 500, // Start at 500%
+        sizePercent: ZOOM_PERCENT, // Start at 500%
       };
-      setZoomSizePercent(500);
+      setZoomSizePercent(ZOOM_PERCENT);
     }
 
     const startTime = performance.now();
@@ -498,8 +514,8 @@ const ImageCanvas = ({
         ref={imageRef}
         className="absolute select-none transition-opacity duration-300"
         style={{
-          width: zoomSizePercent !== null ? `${zoomSizePercent}%` : '500%',
-          height: zoomSizePercent !== null ? `${zoomSizePercent}%` : '500%',
+          width: zoomSizePercent !== null ? `${zoomSizePercent}%` : `${ZOOM_PERCENT}%`,
+          height: zoomSizePercent !== null ? `${zoomSizePercent}%` : `${ZOOM_PERCENT}%`,
           top: '50%',
           left: '50%',
           transform: `translate(-50%, -50%) translate3d(${offset.x}px, ${offset.y}px, 0)`,
@@ -740,19 +756,29 @@ export const App = () => {
           : imageLoadError?.message ?? imageLoadError?.code ?? null;
   const loading = initLoading || levelLoading;
   const error = initError || levelError;
+  const imageReady = Boolean(imageUrl) && !loading && !error && !showExternalUrlMessage;
 
   const [score, setScore] = useState(100_000);
   const [showGuessUI, setShowGuessUI] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
+  const [userGuess, setUserGuess] = useState<'Delulu' | 'Celulu' | null>(null);
 
   const handleGuessButtonClick = () => {
     setShowGuessUI(true);
   };
 
-  const handleGuess = () => {
+  const handleGuess = (guess: 'Delulu' | 'Celulu') => {
+    setUserGuess(guess);
     setShowGuessUI(false);
     setIsZooming(true);
   };
+
+  const correctAnswer = level?.answer === 'Delulu' || level?.answer === 'Celulu' ? level.answer : null;
+  const gotItCorrect = userGuess !== null && correctAnswer !== null && userGuess === correctAnswer;
+  const revealMessage =
+    correctAnswer != null && userGuess != null
+      ? REVEAL_MESSAGES[correctAnswer][gotItCorrect ? 'correct' : 'incorrect']
+      : "Correct! It's a Celulu! You're not Delulu.";
 
   useEffect(() => {
     // Stop score timer when guess button is pressed
@@ -786,8 +812,8 @@ export const App = () => {
 
   return (
     <div
-      className="flex flex-col min-h-screen bg-black text-white"
-      style={{ fontFamily: "'Quicksand', sans-serif" }}
+      className={`flex flex-col ${APP_THEME.rootClassName}`}
+      style={APP_THEME.rootStyle}
     >
       {/* Top bar: score only */}
       <header className="px-4 py-3 flex items-center justify-center">
@@ -803,65 +829,76 @@ export const App = () => {
       {isZooming && (
         <div className="px-4 py-2 flex justify-center">
           <p className="text-center text-lg font-medium text-white max-w-md">
-            Congrats! It&apos;s a Celulu! (You&apos;re not Delulu)
+            {revealMessage}
           </p>
         </div>
       )}
 
-      {/* Main image canvas */}
+      {/* Main: show only Loading or error until image is ready; then show canvas */}
       <main className="flex-1 flex items-center justify-center px-4 pb-4 relative">
-        {loading && (
-          <p className="text-center text-sm text-gray-400 px-4">Loading...</p>
-        )}
-        {error && !loading && (
-          <p className="text-center text-sm text-amber-400 px-4">Could not load: init failed</p>
-        )}
-        {showExternalUrlMessage && !loading && (
-          <div className="text-center text-sm text-amber-400/90 px-4 absolute top-12 left-4 right-4 z-10 space-y-1">
-            <p>
-              {errorDetail ? (
-                <>Image failed: <strong>{errorDetail}</strong></>
-              ) : (
-                <>Loading image…</>
-              )}
-            </p>
-            <p className="text-amber-400/70 text-xs">
-              Use a <strong>Reddit image URL</strong> (i.redd.it, redditmedia.com) or add the image to <strong>assets</strong> and use its filename.
-            </p>
+        {!imageReady && (
+          <div className="flex flex-col items-center justify-center gap-3 text-center px-4">
+            {loading && (
+              <p className="text-sm text-gray-400">Loading...</p>
+            )}
+            {error && !loading && (
+              <p className="text-sm text-amber-400">
+                Could not load: init failed. Try refreshing and trying again.
+              </p>
+            )}
+            {showExternalUrlMessage && !loading && (
+              <div className="text-sm text-amber-400/90 space-y-2 max-w-sm">
+                <p>
+                  {errorDetail ? (
+                    <>Image failed: <strong>{errorDetail}</strong></>
+                  ) : (
+                    <>Loading image…</>
+                  )}
+                </p>
+                <p className="text-amber-400/70 text-xs">
+                  Use a <strong>Reddit image URL</strong> (i.redd.it, redditmedia.com) or add the image to <strong>assets</strong> and use its filename. Try refreshing and trying again.
+                </p>
+              </div>
+            )}
           </div>
         )}
-        <ImageCanvas
-          showGuessUI={showGuessUI}
-          isZooming={isZooming}
-          imageUrl={imageUrl}
-        />
-        
-        {/* Guess UI overlay */}
-        {showGuessUI && !isZooming && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-4 z-10">
-            <p className="text-center text-lg font-medium text-white max-w-md">
-              So... are you delulu or is this a celulu (celebrity)?
-            </p>
-            <div className="flex flex-col gap-3 w-full max-w-xs">
-              <button
-                onClick={handleGuess}
-                className="w-full h-12 rounded-full bg-red-500 text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
-              >
-                Delulu
-              </button>
-              <button
-                onClick={handleGuess}
-                className="w-full h-12 rounded-full bg-blue-500 text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
-              >
-                Celulu
-              </button>
-            </div>
-          </div>
+        {imageReady && (
+          <>
+            <ImageCanvas
+              showGuessUI={showGuessUI}
+              isZooming={isZooming}
+              imageUrl={imageUrl}
+              onMarkerHit={(type) =>
+                setScore((prev) => (type === 'powerup' ? prev + 500 : Math.max(0, prev - 500)))
+              }
+            />
+            {showGuessUI && !isZooming && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-4 z-10">
+                <p className="text-center text-lg font-medium text-white max-w-md">
+                  So... are you delulu or is this a celulu (celebrity)?
+                </p>
+                <div className="flex flex-col gap-3 w-full max-w-xs">
+                  <button
+                    onClick={() => handleGuess('Delulu')}
+                    className="w-full h-12 rounded-full bg-red-500 text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
+                  >
+                    Delulu
+                  </button>
+                  <button
+                    onClick={() => handleGuess('Celulu')}
+                    className="w-full h-12 rounded-full bg-blue-500 text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
+                  >
+                    Celulu
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </main>
 
-      {/* Bottom fixed answer button */}
-      {!showGuessUI && !isZooming && (
+      {/* Bottom fixed answer button — only when image is ready */}
+      {imageReady && !showGuessUI && !isZooming && (
         <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
           <button
             onClick={handleGuessButtonClick}
