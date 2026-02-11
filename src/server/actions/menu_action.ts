@@ -92,6 +92,68 @@ export const menuAction = (router: Router): void => {
   );
 
   router.post(
+    '/internal/menu/post-level',
+    async (_req, res): Promise<void> => {
+      const logger = await Logger.Create('Menu - Post Level');
+      logger.traceStart('Menu Action');
+      try {
+        const raw = await redis.hGetAll(QUEUE_KEY);
+        const celebrityName =
+          (typeof raw['celebrityName'] === 'string' ? raw['celebrityName'] : null) ?? '';
+        const levelEntries = Object.entries(raw).filter(
+          ([key]) => !META_KEYS.includes(key)
+        );
+        const options = levelEntries.map(([levelName]) => ({
+          value: levelName,
+          label: `${levelName}${celebrityName ? ` — ${celebrityName}` : ''}`,
+        }));
+        if (options.length === 0) {
+          res.json({
+            showForm: {
+              name: 'createPostForm',
+              form: {
+                fields: [
+                  {
+                    type: 'string',
+                    name: 'levelName',
+                    label: 'Level to post',
+                    helpText: 'No levels in the queue. Add levels with "Add level" first.',
+                  },
+                ],
+              },
+            },
+          });
+          return;
+        }
+        res.json({
+          showForm: {
+            name: 'createPostForm',
+            form: {
+              fields: [
+                {
+                  type: 'select',
+                  name: 'levelName',
+                  label: 'Level to post',
+                  helpText: 'Select a level to create a new game post.',
+                  options,
+                },
+              ],
+            },
+          },
+        });
+      } catch (error) {
+        logger.error('Error in post-level menu:', error);
+        res.status(400).json({
+          status: 'error',
+          message: 'Post level failed',
+        });
+      } finally {
+        logger.traceEnd();
+      }
+    }
+  );
+
+  router.post(
     '/internal/menu/provide-data',
     async (_req, res): Promise<void> => {
       // Create a logger

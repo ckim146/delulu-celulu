@@ -12,7 +12,8 @@
   "media": { "dir": "assets" },
   "forms": {
     "createGameForm": "/internal/form/create-game-form",
-    "deleteLevelForm": "/internal/form/delete-level"
+    "deleteLevelForm": "/internal/form/delete-level",
+    "createPostForm": "/internal/form/create-post"
   },
   "menu": {
     "items": [
@@ -36,6 +37,13 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/manage-levels"
+      },
+      {
+        "label": "Post a level",
+        "description": "Create a new game post from an uploaded level",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-level"
       }
     ]
   },

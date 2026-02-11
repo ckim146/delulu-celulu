@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { redis } from '@devvit/web/server';
+import { context, reddit, redis } from '@devvit/web/server';
 import { Logger } from '../utils/Logger';
 
 const QUEUE_KEY = 'data:queue';
@@ -62,6 +62,63 @@ console.log('Redis result:', result);
     }
   });
   
+
+  // create-post: server runs inside devvit playtest — run "devvit logs" to see console.log
+  router.post('/internal/form/create-post', (req, res) => {
+    console.log('[create-post] handler hit');
+    try {
+      const body = req.body ?? {};
+      const levelName =
+        body.levelName;
+      console.log('[create-post] levelName', levelName);
+      if (!levelName) {
+        res.status(200).json({
+          showToast: { text: 'Please select a level to post.' },
+        });
+        return;
+      }
+      res.status(200).json({
+        showToast: { text: 'Creating game post…' },
+      });
+      void (async () => {
+        try {
+          const raw = await redis.hGetAll(QUEUE_KEY);
+          console.log('[create-post] raw', raw);
+          const imageUrl = raw[levelName];
+          const gameData =
+            typeof imageUrl === 'string' ? imageUrl : typeof imageUrl === 'number' ? String(imageUrl) : null;
+          if (!gameData) {
+            console.log('Create post failed: no game data: ');
+            return;
+          }
+          await redis.set(`level:${levelName}`, gameData);
+          const subredditName = context.subredditName;
+          if (!subredditName) return;
+          await reddit.submitCustomPost({
+            subredditName,
+            title: 'New Game Level - ' + levelName,
+            splash: {
+              appDisplayName: 'Level ' + levelName,
+              heading: 'Level ' + levelName,
+              description: 'Did you test to see if you are Delulu today?',
+              backgroundUri: 'default-splash.png',
+              buttonLabel: 'Tap to Start',
+              appIconUri: 'default-icon.png',
+            },
+            postData: { levelName: levelName },
+          });
+        } catch (err) {
+          console.log('Create post failed: ', err);
+          const logger = await Logger.Create('Form - Create Post');
+          logger.error('Create post failed:', err);
+        }
+      })();
+    } catch {
+      res.status(200).json({
+        showToast: { text: 'Something went wrong.' },
+      });
+    }
+  });
 
   router.post(
     '/internal/form/create-game-form',

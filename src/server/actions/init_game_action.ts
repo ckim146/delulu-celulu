@@ -35,8 +35,20 @@ export const initGameAction = (router: Router): void => {
           return;
         }
 
-        const levelData = await redis.get(`level:${postData.levelName}`);
-
+        const levelKey = `level:${postData.levelName}`;
+        const legacyData = await redis.get(levelKey);
+        if (typeof legacyData === 'string' && legacyData.length > 0) {
+          res.json({
+            type: 'init',
+            levelName: postData.levelName,
+            levelData: legacyData,
+            username: username ?? 'anonymous',
+          });
+          return;
+        }
+        const levelHash = await redis.hGetAll(levelKey);
+        const imageUrl = levelHash['imageUrl'] ?? levelHash.imageUrl;
+        const levelData = typeof imageUrl === 'string' ? imageUrl : imageUrl != null ? String(imageUrl) : '';
         if (!levelData) {
           logger.info('API Init: no level data in redis for levelName, returning default init');
           res.json({
@@ -47,12 +59,15 @@ export const initGameAction = (router: Router): void => {
           });
           return;
         }
-
+        const answer = levelHash['answer'] ?? levelHash.answer;
+        const celebrityName = levelHash['celebrityName'] ?? levelHash.celebrityName;
         res.json({
           type: 'init',
           levelName: postData.levelName,
           levelData,
           username: username ?? 'anonymous',
+          ...(typeof answer === 'string' && { answer }),
+          ...(typeof celebrityName === 'string' && { celebrityName }),
         });
 
         /* ========== End Focus - Fetch from redis + return result ========== */
