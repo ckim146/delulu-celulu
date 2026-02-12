@@ -851,6 +851,8 @@ export const App = () => {
   const [showGuessUI, setShowGuessUI] = useState(false);
   const [isZooming, setIsZooming] = useState(false);
   const [userGuess, setUserGuess] = useState<'Delulu' | 'Celulu' | null>(null);
+  const [scoreSubmitted, setScoreSubmitted] = useState(false);
+  const [scoreSubmitting, setScoreSubmitting] = useState(false);
 
   const handleGuessButtonClick = () => {
     setShowGuessUI(true);
@@ -901,6 +903,23 @@ export const App = () => {
   }, [showGuessUI]);
 
   const roundedScore = Math.floor(score);
+
+  const handleSubmitScore = async () => {
+    const username = initState.username ?? 'anonymous';
+    setScoreSubmitting(true);
+    try {
+      const res = await fetch('/api/submit-score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, score: roundedScore }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) setScoreSubmitted(true);
+    } finally {
+      setScoreSubmitting(false);
+    }
+  };
 
   return (
     <div className={`flex flex-col ${APP_THEME.rootClassName}`} style={APP_THEME.rootStyle}>
@@ -984,7 +1003,7 @@ export const App = () => {
         )}
       </main>
 
-      {/* Bottom fixed answer button — only when image is ready */}
+      {/* Bottom: Guess button (during game) or Submit score button (after reveal) */}
       {imageReady && !showGuessUI && !isZooming && (
         <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
           <button
@@ -992,6 +1011,22 @@ export const App = () => {
             className="w-full h-12 rounded-full bg-[#d93900] text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
           >
             Guess: Altered or Original
+          </button>
+        </footer>
+      )}
+      {imageReady && isZooming && (
+        <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
+          <button
+            type="button"
+            onClick={handleSubmitScore}
+            disabled={scoreSubmitted || scoreSubmitting}
+            className="w-full h-12 rounded-full bg-[#d93900] text-white font-semibold text-base shadow-lg disabled:opacity-60 disabled:pointer-events-none active:scale-[0.97] transition-transform"
+          >
+            {scoreSubmitting
+              ? 'Submitting…'
+              : scoreSubmitted
+                ? 'Score submitted!'
+                : 'Submit score'}
           </button>
         </footer>
       )}

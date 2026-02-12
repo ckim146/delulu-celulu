@@ -1,5 +1,5 @@
 import express from 'express';
-import { context, createServer, getServerPort, redis } from '@devvit/web/server';
+import { context, createServer, getServerPort, reddit, redis } from '@devvit/web/server';
 
 /* ========== Start Focus - Import action files ========== */
 import { menuAction } from './actions/menu_action';
@@ -27,6 +27,62 @@ initGameAction(router);
 router.get('/api/ping', (_req, res) => {
   console.log('[server] GET /api/ping hit');
   res.json({ ok: true });
+});
+
+// POST /api/submit-score — add username and score to leaderboard (Redis sorted set for high scores)
+router.post('/api/submit-score', async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const username = typeof body.username === 'string' ? body.username.trim() : '';
+    const gameScore = typeof body.score === 'number' ? body.score : Number(body.score);
+    if (!username || Number.isNaN(gameScore)) {
+      res.status(400).json({ ok: false, error: 'Missing or invalid username or score' });
+      return;
+    }
+    await redis.zAdd('leaderboard', {
+      member: username,
+      score: gameScore,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Submit score error:', err);
+    res.status(500).json({ ok: false, error: 'Failed to submit score' });
+  }
+});
+
+// GET /api/leaderboard — top 3 scores (descending) with avatar URLs for splash screen
+router.get('/api/leaderboard', async (_req, res) => {
+  try {
+    const topScores = await redis.zRange('leaderboard', 0, 2, {
+      by: 'rank',
+      reverse: true,
+    });
+    const list = Array.isArray(topScores) ? topScores : [];
+    const withAvatars: { member: string; score: number; avatarUrl?: string }[] = await Promise.all(
+      list.map(async (entry: { member?: string; score?: number }) => {
+        const member = typeof entry?.member === 'string' ? entry.member : '';
+        const score = typeof entry?.score === 'number' ? entry.score : 0;
+        let avatarUrl: string | undefined;
+        try {
+          const user = await reddit.getUserByUsername(member);
+          if (user) {
+            avatarUrl =
+              (user as { iconUrl?: string }).iconUrl ??
+              (typeof (user as { getSnoovatarUrl?: () => Promise<string> }).getSnoovatarUrl === 'function'
+                ? await (user as { getSnoovatarUrl: () => Promise<string> }).getSnoovatarUrl()
+                : undefined);
+          }
+        } catch {
+          // leave avatarUrl undefined
+        }
+        return { member, score, ...(avatarUrl && { avatarUrl }) };
+      })
+    );
+    res.json({ topScores: withAvatars });
+  } catch (err) {
+    console.error('Leaderboard fetch error:', err);
+    res.status(500).json({ topScores: [] });
+  }
 });
 
 // GET /api/asset-url?name=<assetName> — get Reddit-hosted URL for an image in assets/ (CSP-safe, no proxy)
