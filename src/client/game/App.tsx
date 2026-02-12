@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { context } from '@devvit/web/client';
 import { APP_THEME } from '../theme';
 
+const CC_BY_2_0_DEED_URL = 'https://creativecommons.org/licenses/by/2.0/';
+
 type InitResponse = {
   type: 'init';
   levelName: string;
@@ -11,6 +13,8 @@ type InitResponse = {
   postId?: string;
   answer?: string;
   celebrityName?: string;
+  originalImageLink?: string;
+  imageLicense?: string;
 };
 
 type LevelData = {
@@ -674,6 +678,8 @@ export const App = () => {
     postId: string | null;
     answer: string | null;
     celebrityName: string | null;
+    originalImageLink: string | null;
+    imageLicense: string | null;
     loading: boolean;
     error: boolean;
   }>({
@@ -683,6 +689,8 @@ export const App = () => {
     postId: null,
     answer: initialPostContext.answer,
     celebrityName: initialPostContext.celebrityName,
+    originalImageLink: null,
+    imageLicense: null,
     loading: true,
     error: false,
   });
@@ -713,6 +721,8 @@ export const App = () => {
           postId: typeof data.postId === 'string' ? data.postId : null,
           answer: prev.answer ?? (typeof data.answer === 'string' ? data.answer : null),
           celebrityName: prev.celebrityName ?? (typeof data.celebrityName === 'string' ? data.celebrityName : null),
+          originalImageLink: typeof data.originalImageLink === 'string' ? data.originalImageLink : null,
+          imageLicense: typeof data.imageLicense === 'string' ? data.imageLicense : null,
           loading: false,
           error: false,
         }));
@@ -1101,6 +1111,33 @@ export const App = () => {
           </>
         )}
       </main>
+
+      {/* CC 2.0 attribution — between image and Submit score, only on final/reveal screen */}
+      {imageReady &&
+        isZooming &&
+        initState.imageLicense &&
+        (initState.imageLicense === 'CC2.0' || initState.imageLicense.toLowerCase().includes('cc 2.0') || initState.imageLicense.toLowerCase().includes('cc2.0')) && (
+          <p className="text-center text-xs text-gray-400 px-4 py-2">
+            This{' '}
+            <a
+              href={initState.originalImageLink ?? imageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-gray-300 hover:text-white"
+            >
+              image
+            </a>{' '}
+            is licensed under{' '}
+            <a
+              href={CC_BY_2_0_DEED_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline text-gray-300 hover:text-white"
+            >
+              CC License 2.0
+            </a>
+          </p>
+        )}
 
       {/* Bottom: Guess button (during game) or Submit score button (after reveal); hidden during countdown */}
       {imageReady && countdown === null && !showGuessUI && !isZooming && (

@@ -58,6 +58,16 @@ export const initGameAction = (router: Router): void => {
           const answerStr = typeof answer === 'string' ? answer : answer != null ? String(answer) : '';
           const celebrityNameStr =
             typeof celebrityName === 'string' ? celebrityName : celebrityName != null ? String(celebrityName) : '';
+          const embeddedOriginalLink =
+            postData.originalImageLink ??
+            (postData as Record<string, unknown>).originalImageLink ??
+            (postData as Record<string, unknown>).original_image_link;
+          const embeddedLicense =
+            postData.imageLicense ??
+            (postData as Record<string, unknown>).imageLicense ??
+            (postData as Record<string, unknown>).image_license;
+          const originalLinkStr = typeof embeddedOriginalLink === 'string' ? embeddedOriginalLink.trim() : '';
+          const licenseStr = typeof embeddedLicense === 'string' ? embeddedLicense : '';
           res.json(initPayload({
             type: 'init',
             levelName,
@@ -66,6 +76,8 @@ export const initGameAction = (router: Router): void => {
             username: username ?? 'anonymous',
             ...(answerStr && { answer: answerStr }),
             ...(celebrityNameStr && { celebrityName: celebrityNameStr }),
+            ...(originalLinkStr && { originalImageLink: originalLinkStr }),
+            ...(licenseStr && { imageLicense: licenseStr }),
           }));
           return;
         }
@@ -98,6 +110,10 @@ export const initGameAction = (router: Router): void => {
         }
         const answer = levelHash['answer'] ?? levelHash.answer;
         const celebrityName = levelHash['celebrityName'] ?? levelHash.celebrityName;
+        const redisOriginalLink = levelHash['originalImageLink'] ?? levelHash.originalImageLink ?? levelHash['original_image_link'];
+        const redisLicense = levelHash['imageLicense'] ?? levelHash.imageLicense ?? levelHash['image_license'];
+        const origLinkStr = typeof redisOriginalLink === 'string' ? redisOriginalLink.trim() : '';
+        const licStr = typeof redisLicense === 'string' ? redisLicense : '';
         res.json(initPayload({
           type: 'init',
           levelName,
@@ -106,6 +122,8 @@ export const initGameAction = (router: Router): void => {
           username: username ?? 'anonymous',
           ...(typeof answer === 'string' && { answer }),
           ...(typeof celebrityName === 'string' && { celebrityName }),
+          ...(origLinkStr && { originalImageLink: origLinkStr }),
+          ...(licStr && { imageLicense: licStr }),
         }));
 
         /* ========== End Focus - Fetch from redis + return result ========== */
