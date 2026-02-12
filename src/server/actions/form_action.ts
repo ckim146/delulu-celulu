@@ -27,27 +27,20 @@ export const formAction = (router: Router): void => {
   
     try {
       const body = req.body ?? {};
-      const levelName =
+      const keyToRemove =
         typeof body.levelName === 'string'
           ? body.levelName
           : typeof body.form?.levelName === 'string'
             ? body.form.levelName
             : undefined;
-  
-      // if (!levelName?.trim()) {
-      //   res.status(200).json({
-      //     showToast: { text: 'Please select a level to delete.' },
-      //   });
-      //   return;
-      // }
-  
-      const keyToRemove = body.levelName;
-  
-      // DO the Redis operation BEFORE responding
-      console.log('Removing key:', body);
-const result = await redis.hDel(QUEUE_KEY, keyToRemove);
-console.log('Redis result:', result);
-  
+
+      if (keyToRemove) {
+        await redis.hDel(QUEUE_KEY, [
+          keyToRemove,
+          `${keyToRemove}_originalLink`,
+          `${keyToRemove}_license`,
+        ]);
+      }
       res.status(200).json({
         showToast: { text: 'Level removed from the queue.' },
       });
@@ -89,17 +82,31 @@ console.log('Redis result:', result);
           if (!gameData) return;
           const answer = raw['answer'];
           const celebrityName = raw['celebrityName'];
+          const originalImageLink = raw[`${levelName}_originalLink`];
+          const imageLicense = raw[`${levelName}_license`];
           const answerStr = typeof answer === 'string' ? answer : answer != null ? String(answer) : '';
           const celebrityNameStr = typeof celebrityName === 'string' ? celebrityName : celebrityName != null ? String(celebrityName) : '';
+          const originalLinkStr = typeof originalImageLink === 'string' ? originalImageLink : '';
+          const licenseStr = typeof imageLicense === 'string' ? imageLicense : 'No restrictions';
           const levelKey = `level:${levelName}`;
           await redis.del(levelKey);
           await redis.hSet(levelKey, {
             imageUrl: gameData,
             answer: answerStr,
             celebrityName: celebrityNameStr,
+            ...(originalLinkStr && { originalImageLink: originalLinkStr }),
+            imageLicense: licenseStr,
           });
           const subredditName = context.subredditName;
           if (!subredditName) return;
+          const postData: Record<string, string> = {
+            levelName,
+            levelData: gameData,
+            answer: answerStr,
+            celebrityName: celebrityNameStr,
+            imageLicense: licenseStr,
+          };
+          if (originalLinkStr) postData.originalImageLink = originalLinkStr;
           await reddit.submitCustomPost({
             subredditName,
             title: 'New Game Level - ' + levelName,
@@ -111,12 +118,7 @@ console.log('Redis result:', result);
               buttonLabel: 'Tap to Start',
               appIconUri: 'default-icon.png',
             },
-            postData: {
-              levelName,
-              levelData: gameData,
-              answer: answerStr,
-              celebrityName: celebrityNameStr,
-            },
+            postData,
           });
         } catch (err) {
           console.log('Create post failed: ', err);
@@ -146,12 +148,24 @@ console.log('Redis result:', result);
         // (manually vs. periodically). As an example, this action adds the provided data to a queue for processing by
         // a scheduled action. Be sure to check out the notes in 3_scheduledAction.ts!
 
-        // Obtain levelName and gameData from form
-        const { levelName, imageUrl, answer, celebrityName } = req.body;
-        logger.info(`Form action triggered. Saving ${levelName} and ${imageUrl} to processing queue.`);
+        // Obtain level data from form (normalize to strings; form may send arrays for select fields)
+        const { levelName, imageUrl, answer, celebrityName, originalImageLink, imageLicense } = req.body;
+        const str = (v: unknown): string =>
+          Array.isArray(v) ? (v[0] != null ? String(v[0]) : '') : v != null ? String(v) : '';
+        const levelNameStr = str(levelName).trim();
+        const imageUrlStr = str(imageUrl).trim();
+        logger.info(`Form action triggered. Saving ${levelNameStr} and ${imageUrlStr} to processing queue.`);
 
-        // Stores provided level data into Redis hash.
-        await redis.hSet(QUEUE_KEY, { [levelName]: imageUrl, answer, celebrityName });
+        const originalLinkStr = typeof originalImageLink === 'string' ? originalImageLink.trim() : str(originalImageLink).trim();
+        const licenseStr = str(imageLicense) || 'No restrictions';
+        const toSet: Record<string, string> = {
+          [levelNameStr]: imageUrlStr,
+          answer: str(answer),
+          celebrityName: str(celebrityName),
+          [`${levelNameStr}_license`]: licenseStr,
+        };
+        if (originalLinkStr) toSet[`${levelNameStr}_originalLink`] = originalLinkStr;
+        await redis.hSet(QUEUE_KEY, toSet);
 
         // Display success to user
         res.status(200).json({

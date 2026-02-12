@@ -39,7 +39,10 @@ export const menuAction = (router: Router): void => {
         const answer = (typeof raw['answer'] === 'string' ? raw['answer'] : null) ?? '';
         const celebrityName = (typeof raw['celebrityName'] === 'string' ? raw['celebrityName'] : null) ?? '';
         const levelEntries = Object.entries(raw).filter(
-          ([key]) => !META_KEYS.includes(key)
+          ([key]) =>
+            !META_KEYS.includes(key) &&
+            !key.endsWith('_originalLink') &&
+            !key.endsWith('_license')
         );
         const options = levelEntries.map(([levelName, imageUrl]) => ({
           value: levelName,
@@ -101,7 +104,10 @@ export const menuAction = (router: Router): void => {
         const celebrityName =
           (typeof raw['celebrityName'] === 'string' ? raw['celebrityName'] : null) ?? '';
         const levelEntries = Object.entries(raw).filter(
-          ([key]) => !META_KEYS.includes(key)
+          ([key]) =>
+            !META_KEYS.includes(key) &&
+            !key.endsWith('_originalLink') &&
+            !key.endsWith('_license')
         );
         const options = levelEntries.map(([levelName]) => ({
           value: levelName,
@@ -200,13 +206,28 @@ export const menuAction = (router: Router): void => {
                   ],
                 },
                 {
-                    type: 'string',
-                    name: 'celebrityName',
-                    label: 'Celebrity Name',
-                    optional: true,
-                  }
-
-                ]
+                  type: 'string',
+                  name: 'celebrityName',
+                  label: 'Celebrity Name',
+                  optional: true,
+                },
+                {
+                  type: 'string',
+                  name: 'originalImageLink',
+                  label: 'Link to original image',
+                  helpText: 'Optional URL to the original (unmodified) image for attribution.',
+                  optional: true,
+                },
+                {
+                  type: 'select',
+                  name: 'imageLicense',
+                  label: 'Image License',
+                  options: [
+                    { value: 'No restrictions', label: 'No restrictions' },
+                    { value: 'CC2.0', label: 'CC 2.0' },
+                  ],
+                },
+              ]
             }
           }
         });
