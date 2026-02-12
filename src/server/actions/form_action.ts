@@ -83,16 +83,21 @@ console.log('Redis result:', result);
       void (async () => {
         try {
           const raw = await redis.hGetAll(QUEUE_KEY);
-          console.log('[create-post] raw', raw);
           const imageUrl = raw[levelName];
-          console.log('[create-post] imageUrl', imageUrl);
           const gameData =
             typeof imageUrl === 'string' ? imageUrl : typeof imageUrl === 'number' ? String(imageUrl) : null;
-          if (!gameData) {
-            console.log('Create post failed: no game data: ');
-            return;
-          }
-          await redis.set(`level:${levelName}`, gameData);
+          if (!gameData) return;
+          const answer = raw['answer'];
+          const celebrityName = raw['celebrityName'];
+          const answerStr = typeof answer === 'string' ? answer : answer != null ? String(answer) : '';
+          const celebrityNameStr = typeof celebrityName === 'string' ? celebrityName : celebrityName != null ? String(celebrityName) : '';
+          const levelKey = `level:${levelName}`;
+          await redis.del(levelKey);
+          await redis.hSet(levelKey, {
+            imageUrl: gameData,
+            answer: answerStr,
+            celebrityName: celebrityNameStr,
+          });
           const subredditName = context.subredditName;
           if (!subredditName) return;
           await reddit.submitCustomPost({
@@ -106,7 +111,12 @@ console.log('Redis result:', result);
               buttonLabel: 'Tap to Start',
               appIconUri: 'default-icon.png',
             },
-            postData: { levelName: levelName },
+            postData: {
+              levelName,
+              levelData: gameData,
+              answer: answerStr,
+              celebrityName: celebrityNameStr,
+            },
           });
         } catch (err) {
           console.log('Create post failed: ', err);

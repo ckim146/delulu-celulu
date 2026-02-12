@@ -57,7 +57,10 @@ const ImageCanvas = ({
   const [edgeHit, setEdgeHit] = useState(false);
   const edgeHitTimeoutRef = useRef<number | null>(null);
   const zoomAnimationRef = useRef<number | null>(null);
-  const initialZoomStateRef = useRef<{ offset: { x: number; y: number }; sizePercent: number } | null>(null);
+  const initialZoomStateRef = useRef<{
+    offset: { x: number; y: number };
+    sizePercent: number;
+  } | null>(null);
   const [zoomSizePercent, setZoomSizePercent] = useState<number | null>(null);
   const zoomCompletedRef = useRef(false);
   const ZOOM_PERCENT = 600;
@@ -359,16 +362,8 @@ const ImageCanvas = ({
         let nextX = prev.x + vx * dt;
         let nextY = prev.y + vy * dt;
 
-        const {
-          softMinX,
-          softMaxX,
-          softMinY,
-          softMaxY,
-          hardMinX,
-          hardMaxX,
-          hardMinY,
-          hardMaxY,
-        } = boundsRef.current;
+        const { softMinX, softMaxX, softMinY, softMaxY, hardMinX, hardMaxX, hardMinY, hardMaxY } =
+          boundsRef.current;
 
         // Horizontal bounds with bounce at the image edge (soft), but allow overshoot (hard)
         if (nextX > softMaxX) {
@@ -575,8 +570,8 @@ const ImageCanvas = ({
               hitColor === 'red'
                 ? 'border-red-400 shadow-[0_0_18px_rgba(248,113,113,0.9)]'
                 : hitColor === 'blue'
-                ? 'border-blue-400 shadow-[0_0_18px_rgba(59,130,246,0.9)]'
-                : 'border-white/30 shadow-none'
+                  ? 'border-blue-400 shadow-[0_0_18px_rgba(59,130,246,0.9)]'
+                  : 'border-white/30 shadow-none'
             }`}
             style={{
               transform: `rotate(${arrowRotation}deg)`,
@@ -634,7 +629,9 @@ export const App = () => {
   useEffect(() => {
     const init = async () => {
       try {
+        console.log('[App] calling /api/init');
         const res = await fetch('/api/init');
+        console.log('[App] init response', res.status);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: InitResponse = await res.json();
         if (data.type !== 'init') throw new Error('Unexpected response');
@@ -658,7 +655,7 @@ export const App = () => {
   // Only fetch /api/levels when init did not return level data (e.g. post created without a level).
   // For manually created game posts, we use init (postData) only.
   useEffect(() => {
-    console.log("app loading");
+    console.log('app loading');
     if (initState.loading) return;
     console.log('[App] initState.loading', initState);
     if (initState.levelData) {
@@ -697,7 +694,10 @@ export const App = () => {
   const { levelData, answer: initAnswer, loading: initLoading, error: initError } = initState;
   const { level, loading: levelLoading, error: levelError } = levelState;
   // Prefer init (postData) when this post was created with a level; fall back to /api/levels only when init has no levelData.
-  const rawImageUrl = initState.levelData ? initState.levelData : (level?.imageUrl ?? levelData ?? '');
+  const rawImageUrl = initState.levelData
+    ? initState.levelData
+    : (level?.imageUrl ?? levelData ?? '');
+  console.log('[App] rawImageUrl', rawImageUrl);
 
   // CSP connect-src only allows: 'self', webview.devvit.net, *.redd.it, *.redditmedia.com, *.redditstatic.com, blob:
   // So we cannot fetch() external URLs (e.g. Wikipedia). Only Reddit URLs work for direct use or client fetch.
@@ -731,7 +731,8 @@ export const App = () => {
       setResolvedImageUrl('');
       setImageLoadError({
         code: 'csp_connect_src',
-        message: "This domain isn't allowed by the app's security policy (connect-src). Use a Reddit image URL or add the image to assets.",
+        message:
+          "This domain isn't allowed by the app's security policy (connect-src). Use a Reddit image URL or add the image to assets.",
       });
       return;
     }
@@ -742,7 +743,12 @@ export const App = () => {
       fetch(`/api/asset-url?name=${encodeURIComponent(rawImageUrl)}`, { credentials: 'include' })
         .then((res) => {
           if (!res.ok) {
-            if (!cancelled) setImageLoadError({ code: 'asset_http', status: res.status, message: res.statusText });
+            if (!cancelled)
+              setImageLoadError({
+                code: 'asset_http',
+                status: res.status,
+                message: res.statusText,
+              });
             return Promise.reject(new Error('Asset not found'));
           }
           return res.json();
@@ -764,20 +770,17 @@ export const App = () => {
     setImageLoadError(null);
   }, [rawImageUrl, useDirectUrl, blockedByCsp, isAssetName]);
 
-  const imageUrl = useDirectUrl
-    ? rawImageUrl
-    : isAssetName
-      ? resolvedImageUrl
-      : rawImageUrl;
-  const showExternalUrlMessage = blockedByCsp || (imageLoadError != null && isHttpUrl && !useDirectUrl);
+  const imageUrl = useDirectUrl ? rawImageUrl : isAssetName ? resolvedImageUrl : rawImageUrl;
+  const showExternalUrlMessage =
+    blockedByCsp || (imageLoadError != null && isHttpUrl && !useDirectUrl);
   const errorDetail =
     imageLoadError?.code === 'http' && imageLoadError.status != null
       ? `HTTP ${imageLoadError.status}${imageLoadError.message ? `: ${imageLoadError.message}` : ''}`
       : imageLoadError?.code === 'csp_connect_src'
-        ? "Domain blocked by security policy (connect-src). Use a Reddit image URL (i.redd.it, redditmedia.com) or add the image to the assets folder."
+        ? 'Domain blocked by security policy (connect-src). Use a Reddit image URL (i.redd.it, redditmedia.com) or add the image to the assets folder.'
         : imageLoadError?.code === 'network_or_cors'
           ? 'Network error or CORS blocked (try a Reddit image URL or assets)'
-          : imageLoadError?.message ?? imageLoadError?.code ?? null;
+          : (imageLoadError?.message ?? imageLoadError?.code ?? null);
   const loading = initLoading || levelLoading;
   const error = initError || levelError;
   const imageReady = Boolean(imageUrl) && !loading && !error && !showExternalUrlMessage;
@@ -798,7 +801,8 @@ export const App = () => {
   };
 
   const answerFromInit = initAnswer === 'Delulu' || initAnswer === 'Celulu' ? initAnswer : null;
-  const answerFromLevel = level?.answer === 'Delulu' || level?.answer === 'Celulu' ? level.answer : null;
+  const answerFromLevel =
+    level?.answer === 'Delulu' || level?.answer === 'Celulu' ? level.answer : null;
   const correctAnswer = initState.levelData ? answerFromInit : answerFromLevel;
   const gotItCorrect = userGuess !== null && correctAnswer !== null && userGuess === correctAnswer;
   const revealMessage =
@@ -837,26 +841,19 @@ export const App = () => {
   const roundedScore = Math.floor(score);
 
   return (
-    <div
-      className={`flex flex-col ${APP_THEME.rootClassName}`}
-      style={APP_THEME.rootStyle}
-    >
+    <div className={`flex flex-col ${APP_THEME.rootClassName}`} style={APP_THEME.rootStyle}>
       {/* Top bar: score only */}
       <header className="px-4 py-3 flex items-center justify-center">
         <div className="flex flex-col items-center">
           <span className="text-xs uppercase tracking-wide text-gray-400">Score</span>
-          <span className="text-2xl font-semibold leading-tight tabular-nums">
-            {roundedScore}
-          </span>
+          <span className="text-2xl font-semibold leading-tight tabular-nums">{roundedScore}</span>
         </div>
       </header>
 
       {/* Reveal message: between score and canvas */}
       {isZooming && (
         <div className="px-4 py-2 flex justify-center">
-          <p className="text-center text-lg font-medium text-white max-w-md">
-            {revealMessage}
-          </p>
+          <p className="text-center text-lg font-medium text-white max-w-md">{revealMessage}</p>
         </div>
       )}
 
@@ -864,9 +861,7 @@ export const App = () => {
       <main className="flex-1 flex items-center justify-center px-4 pb-4 relative">
         {!imageReady && (
           <div className="flex flex-col items-center justify-center gap-3 text-center px-4">
-            {loading && (
-              <p className="text-sm text-gray-400">Loading...</p>
-            )}
+            {loading && <p className="text-sm text-gray-400">Loading...</p>}
             {error && !loading && (
               <p className="text-sm text-amber-400">
                 Could not load: init failed. Try refreshing and trying again.
@@ -876,13 +871,17 @@ export const App = () => {
               <div className="text-sm text-amber-400/90 space-y-2 max-w-sm">
                 <p>
                   {errorDetail ? (
-                    <>Image failed: <strong>{errorDetail}</strong></>
+                    <>
+                      Image failed: <strong>{errorDetail}</strong>
+                    </>
                   ) : (
                     <>Loading image…</>
                   )}
                 </p>
                 <p className="text-amber-400/70 text-xs">
-                  Use a <strong>Reddit image URL</strong> (i.redd.it, redditmedia.com) or add the image to <strong>assets</strong> and use its filename. Try refreshing and trying again.
+                  Use a <strong>Reddit image URL</strong> (i.redd.it, redditmedia.com) or add the
+                  image to <strong>assets</strong> and use its filename. Try refreshing and trying
+                  again.
                 </p>
               </div>
             )}

@@ -23,6 +23,12 @@ menuAction(router);
 formAction(router);
 initGameAction(router);
 
+// GET /api/ping — use to verify the server receives requests (e.g. from client or devvit logs)
+router.get('/api/ping', (_req, res) => {
+  console.log('[server] GET /api/ping hit');
+  res.json({ ok: true });
+});
+
 // GET /api/asset-url?name=<assetName> — get Reddit-hosted URL for an image in assets/ (CSP-safe, no proxy)
 router.get('/api/asset-url', (req, res) => {
   const name = req.query.name;

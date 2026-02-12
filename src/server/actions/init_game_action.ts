@@ -9,21 +9,18 @@ import { context, reddit, redis } from '@devvit/web/server';
 import { Logger } from '../utils/Logger';
 
 export const initGameAction = (router: Router): void => {
-  router.get(
-    '/api/init',
-    async (_req, res): Promise<void> => {
-      // Create a logger
+  router.get('/api/init', (_req, res) => {
+    console.log('[init] GET /api/init hit');
+    void (async () => {
       const logger = await Logger.Create('API - Post Init');
       logger.traceStart('API Action');
 
       try {
-
-        /* ========== Start Focus - Fetch from redis + return result ========== */
-
         const { postData } = context;
         const username = await reddit.getCurrentUsername();
+        console.log('[init] postData', postData);
 
-        // If no level name in post context (e.g. post created via "Create a new post"), return safe default so client doesn't 400
+        // If no level identifier in post context (e.g. post created via "Create a new post"), return safe default
         if (!postData?.levelName || typeof postData.levelName !== 'string') {
           logger.info('API Init: no postData.levelName, returning default init');
           res.json({
@@ -35,12 +32,32 @@ export const initGameAction = (router: Router): void => {
           return;
         }
 
-        const levelKey = `level:${postData.levelName}`;
+        const levelName = postData.levelName;
+
+        // Prefer game data embedded in the post (manual "Post a level" flow). No Redis needed.
+        const embeddedLevelData = postData.levelData ?? postData.imageUrl;
+        const embeddedLevelDataStr = typeof embeddedLevelData === 'string' ? embeddedLevelData : '';
+        if (embeddedLevelDataStr.length > 0) {
+          const answer = postData.answer;
+          const celebrityName = postData.celebrityName;
+          res.json({
+            type: 'init',
+            levelName,
+            levelData: embeddedLevelDataStr,
+            username: username ?? 'anonymous',
+            ...(typeof answer === 'string' && { answer }),
+            ...(typeof celebrityName === 'string' && { celebrityName }),
+          });
+          return;
+        }
+
+        // Fallback: load from Redis (scheduler-created or legacy posts that only stored levelName)
+        const levelKey = `level:${levelName}`;
         const legacyData = await redis.get(levelKey);
         if (typeof legacyData === 'string' && legacyData.length > 0) {
           res.json({
             type: 'init',
-            levelName: postData.levelName,
+            levelName,
             levelData: legacyData,
             username: username ?? 'anonymous',
           });
@@ -53,7 +70,7 @@ export const initGameAction = (router: Router): void => {
           logger.info('API Init: no level data in redis for levelName, returning default init');
           res.json({
             type: 'init',
-            levelName: postData.levelName,
+            levelName,
             levelData: '',
             username: username ?? 'anonymous',
           });
@@ -63,7 +80,7 @@ export const initGameAction = (router: Router): void => {
         const celebrityName = levelHash['celebrityName'] ?? levelHash.celebrityName;
         res.json({
           type: 'init',
-          levelName: postData.levelName,
+          levelName,
           levelData,
           username: username ?? 'anonymous',
           ...(typeof answer === 'string' && { answer }),
@@ -81,5 +98,6 @@ export const initGameAction = (router: Router): void => {
       } finally {
         logger.traceEnd();
       }
-    });
-}
+    })();
+  });
+};
