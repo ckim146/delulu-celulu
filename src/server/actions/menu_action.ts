@@ -176,7 +176,8 @@ export const menuAction = (router: Router): void => {
                 {
                   type: 'string',
                   name: 'levelName',
-                  label: 'Level  Name',
+                  label: 'Level Name',
+                  helpText: 'Use a unique name (e.g. "Will Smith - Photo 1"). Duplicate names overwrite existing levels in the queue.',
                 },
                 // {
                 //   type: 'string',
@@ -190,9 +191,13 @@ export const menuAction = (router: Router): void => {
                   helpText: 'To use an image from Reddit: 1) Upload it (e.g. submit an image post to this subreddit), 2) Open the post, right‑click the image → "Copy image address", 3) Paste that URL here (must be i.redd.it, redditmedia.com, or redditstatic.com). Or use a filename from your app\'s assets folder (e.g. celebrity1.jpg) after adding the file to assets/ and running devvit upload.',
                 },
                 {
-                  type: 'string',
+                  type: 'select',
                   name: 'answer',
-                  label: 'Answer (Delulu/Celulu)',
+                  label: 'Answer',
+                  options: [
+                    { value: 'Delulu', label: 'Delulu' },
+                    { value: 'Celulu', label: 'Celulu' },
+                  ],
                 },
                 {
                     type: 'string',

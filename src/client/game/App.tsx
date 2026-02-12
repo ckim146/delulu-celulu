@@ -599,7 +599,20 @@ const ImageCanvas = ({
   );
 };
 
-/** Read level data from post context when app is running inside a custom post (so image loads without relying on init API). */
+/**
+ * Reads level data from the current post's context when the app is running inside a custom game post.
+ *
+ * Devvit provides `context.postData` on the client with the custom data that was attached to the
+ * post at creation time (e.g. when using "Post a level"). Using this here lets the image and
+ * answer load immediately without waiting for the /api/init request, which may not receive the
+ * same post context on the server.
+ *
+ * Supports both camelCase (levelData, imageUrl) and snake_case (level_data, image_url) keys in
+ * case the platform serializes postData differently.
+ *
+ * @returns Level fields (levelName, levelData, answer, celebrityName) or nulls if not in a post
+ *   context or postData is missing/invalid.
+ */
 function getLevelDataFromPostContext(): {
   levelName: string | null;
   levelData: string | null;
@@ -607,24 +620,37 @@ function getLevelDataFromPostContext(): {
   celebrityName: string | null;
 } {
   try {
+    // Guard: context may be undefined in some environments (e.g. dev or outside post)
     const ctx = typeof context !== 'undefined' ? context : null;
     const pd = (ctx as { postData?: Record<string, unknown> } | null)?.postData;
-    if (!pd || typeof pd !== 'object') return { levelName: null, levelData: null, answer: null, celebrityName: null };
+
+    if (!pd || typeof pd !== 'object') {
+      return { levelName: null, levelData: null, answer: null, celebrityName: null };
+    }
+
+    // Level name: prefer camelCase, fall back to snake_case
     const levelName =
       (typeof pd.levelName === 'string' ? pd.levelName : null) ??
       (typeof (pd as Record<string, unknown>).level_name === 'string' ? (pd as Record<string, unknown>).level_name as string : null);
+
+    // Image URL may be stored as levelData or imageUrl (camelCase or snake_case); normalize to trimmed string
     const levelDataRaw =
       pd.levelData ?? pd.imageUrl ?? (pd as Record<string, unknown>).level_data ?? (pd as Record<string, unknown>).image_url;
     const levelData =
       typeof levelDataRaw === 'string' && levelDataRaw.trim()
         ? levelDataRaw.trim()
         : null;
+
+    // Answer (Delulu/Celulu): prefer camelCase, fall back to snake_case
     const answer =
       (typeof pd.answer === 'string' ? pd.answer : null) ??
       (typeof (pd as Record<string, unknown>).answer === 'string' ? (pd as Record<string, unknown>).answer as string : null);
+
+    // Celebrity name: prefer camelCase, fall back to snake_case
     const celebrityName =
       (typeof pd.celebrityName === 'string' ? pd.celebrityName : null) ??
       (typeof (pd as Record<string, unknown>).celebrity_name === 'string' ? (pd as Record<string, unknown>).celebrity_name as string : null);
+
     return { levelName: levelName ?? null, levelData, answer, celebrityName };
   } catch {
     return { levelName: null, levelData: null, answer: null, celebrityName: null };

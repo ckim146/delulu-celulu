@@ -26,7 +26,10 @@ export const Splash = () => {
             Are you Delulu or is it a Celulu?
           </h1>
           <p className="text-base text-center text-gray-400">
-            Pan the zoomed-in image, hit powerups, avoid obstacles — then guess.
+            Can you guess whether you're Delulu or if it's a Celulu (celebrity)?
+          </p>
+          <p className="text-base text-center text-gray-300">
+            Analyze the image quickly! But don't hit the obstacles or the border!
           </p>
         </div>
         <div className="flex items-center justify-center mt-2">

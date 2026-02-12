@@ -39,7 +39,7 @@
         "endpoint": "/internal/menu/manage-levels"
       },
       {
-        "label": "Post a level",
+        "label": "Post a Game",
         "description": "Create a new game post from an uploaded level",
         "location": "subreddit",
         "forUserType": "moderator",
