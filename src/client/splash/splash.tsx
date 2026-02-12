@@ -43,23 +43,41 @@ export const Splash = () => {
 
   return (
     <div
-      className={`flex relative flex-col justify-center items-center min-h-screen ${APP_THEME.rootClassName}`}
+      className={`flex flex-col justify-center items-center min-h-screen ${APP_THEME.rootClassName}`}
       style={rootStyle}
     >
-      <div className="flex flex-col items-center gap-2 px-4">
-        <h1 className="text-xl font-bold text-center text-white leading-tight">
+      <div className="flex flex-col items-center justify-center flex-1 w-full px-4">
+        <h1 className="text-xl font-bold text-center text-white leading-tight mb-3">
           Are you Delulu or is it a Celulu?
         </h1>
-        <img
-          className="object-contain w-full max-w-[200px] mx-auto rounded-lg shadow-lg"
-          src={SPLASH_IMAGE_SRC}
-          alt="Will Smith Alternating"
-        />
-        <div className="flex flex-col items-center gap-0.5">
-          <p className="text-xs text-center text-gray-400">
+
+        <button
+          type="button"
+          className="relative flex items-center justify-center w-full max-w-[240px] rounded-lg shadow-lg cursor-pointer transition-transform active:scale-[0.97] border-0 p-0 bg-transparent"
+          onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
+        >
+          <img
+            className="object-contain w-full rounded-lg pointer-events-none"
+            src={SPLASH_IMAGE_SRC}
+            alt="Tap to play"
+            style={{ boxShadow: '0 0 16px 4px rgba(255,255,255,0.4)' }}
+          />
+          <span
+            className="absolute inset-0 flex items-center justify-center text-white text-3xl font-bold pointer-events-none"
+            style={{
+              textShadow:
+                '0 0 3px #000, 0 0 3px #000, 0 0 3px #000, 1px 1px 2px #000, -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000',
+            }}
+          >
+            play
+          </span>
+        </button>
+
+        <div className="flex flex-col items-center gap-0.5 mt-3">
+          <p className="text-sm text-center text-white">
             Can you guess whether you're Delulu or if it's a Celulu (celebrity)?
           </p>
-          <p className="text-xs text-center text-gray-400">
+          <p className="text-sm text-center text-white">
             Analyze the image quickly! But don't hit the obstacles or the border!
           </p>
           {highScore != null && (
@@ -93,19 +111,6 @@ export const Splash = () => {
               </span>
             </div>
           )}
-        </div>
-        <div className="flex items-center justify-center mt-1">
-          <button
-            className="relative flex items-center justify-center w-auto min-w-[180px] h-12 rounded-full cursor-pointer transition-transform active:scale-[0.97] px-6 text-white font-semibold text-lg overflow-hidden"
-            style={{
-              background: 'linear-gradient(145deg, #7c3aed 0%, #5b21b6 50%, #4c1d95 100%)',
-              boxShadow:
-                'inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 14px rgba(124, 58, 237, 0.4)',
-            }}
-            onClick={(e) => requestExpandedMode(e.nativeEvent, 'game')}
-          >
-            <span className="relative z-10">Tap to Start</span>
-          </button>
         </div>
       </div>
       {/* <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-500">
