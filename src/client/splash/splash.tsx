@@ -6,8 +6,9 @@ import { createRoot } from 'react-dom/client';
 
 import { APP_THEME } from '../theme';
 
-/** Splash image served from client public folder (same origin, no API needed) */
+/** Images from client public folder (same origin, no API needed) */
 const SPLASH_IMAGE_SRC = '/will_smith_alternating.gif';
+const BG_IMAGE_SRC = '/delulu-celulu-bg-small.gif';
 
 type LeaderboardEntry = { member: string; score: number; avatarUrl?: string };
 
@@ -33,10 +34,17 @@ export const Splash = () => {
 
   const highScore = topScores[0];
 
+  const rootStyle = {
+    ...APP_THEME.rootStyle,
+    backgroundImage: `url(${BG_IMAGE_SRC})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+
   return (
     <div
       className={`flex relative flex-col justify-center items-center min-h-screen ${APP_THEME.rootClassName}`}
-      style={APP_THEME.rootStyle}
+      style={rootStyle}
     >
       <div className="flex flex-col items-center gap-2 px-4">
         <h1 className="text-xl font-bold text-center text-white leading-tight">

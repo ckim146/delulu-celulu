@@ -904,6 +904,13 @@ export const App = () => {
 
   const roundedScore = Math.floor(score);
 
+  const rootStyle = {
+    ...APP_THEME.rootStyle,
+    backgroundImage: 'url(/delulu-celulu-bg-small.gif)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+
   const handleSubmitScore = async () => {
     const username = initState.username ?? 'anonymous';
     setScoreSubmitting(true);
@@ -922,7 +929,7 @@ export const App = () => {
   };
 
   return (
-    <div className={`flex flex-col ${APP_THEME.rootClassName}`} style={APP_THEME.rootStyle}>
+    <div className={`flex flex-col ${APP_THEME.rootClassName}`} style={rootStyle}>
       {/* Top bar: score only */}
       <header className="px-4 py-3 flex items-center justify-center">
         <div className="flex flex-col items-center">
@@ -1010,7 +1017,7 @@ export const App = () => {
             onClick={handleGuessButtonClick}
             className="w-full h-12 rounded-full bg-[#d93900] text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
           >
-            Guess: Altered or Original
+            Guess!
           </button>
         </footer>
       )}
