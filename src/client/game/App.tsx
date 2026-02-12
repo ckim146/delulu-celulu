@@ -881,16 +881,20 @@ export const App = () => {
     setShowGuessUI(true);
   };
 
-  const handleGuess = (guess: 'Delulu' | 'Celulu') => {
-    setUserGuess(guess);
-    setShowGuessUI(false);
-    setIsZooming(true);
-  };
-
   const answerFromInit = initAnswer === 'Delulu' || initAnswer === 'Celulu' ? initAnswer : null;
   const answerFromLevel =
     level?.answer === 'Delulu' || level?.answer === 'Celulu' ? level.answer : null;
   const correctAnswer = initState.levelData ? answerFromInit : answerFromLevel;
+
+  const handleGuess = (guess: 'Delulu' | 'Celulu') => {
+    setUserGuess(guess);
+    setShowGuessUI(false);
+    setIsZooming(true);
+    if (correctAnswer != null && guess !== correctAnswer) {
+      setScore(0);
+    }
+  };
+
   const gotItCorrect = userGuess !== null && correctAnswer !== null && userGuess === correctAnswer;
   const revealMessage =
     correctAnswer != null && userGuess != null
