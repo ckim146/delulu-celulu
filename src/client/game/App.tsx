@@ -69,7 +69,7 @@ const ImageCanvas = ({
 
   const [markers, setMarkers] = useState<Marker[]>(() => {
     const items: Marker[] = [];
-    const count = 10;
+    const count = 50; // ~5x density (was 10)
     const minDistance = 5;
 
     const isFarEnough = (x: number, y: number, existing: Marker[]) => {
@@ -85,7 +85,7 @@ const ImageCanvas = ({
     };
 
     let attempts = 0;
-    while (items.length < count && attempts < 1000) {
+    while (items.length < count && attempts < 3000) {
       attempts += 1;
       const x = 10 + Math.random() * 80; // keep away from edges
       const y = 10 + Math.random() * 80;
@@ -853,6 +853,9 @@ export const App = () => {
   const [userGuess, setUserGuess] = useState<'Delulu' | 'Celulu' | null>(null);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
   const [scoreSubmitting, setScoreSubmitting] = useState(false);
+  /** Countdown before gameplay: 3, 2, 1 then null (game starts). Starts once when image is ready. */
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const countdownStartedRef = useRef(false);
 
   const handleGuessButtonClick = () => {
     setShowGuessUI(true);
@@ -874,9 +877,26 @@ export const App = () => {
       ? REVEAL_MESSAGES[correctAnswer][gotItCorrect ? 'correct' : 'incorrect']
       : "Correct! It's a Celulu! You're not Delulu.";
 
+  // Start countdown once when image becomes ready
   useEffect(() => {
-    // Stop score timer when guess button is pressed
-    if (showGuessUI || isZooming) return;
+    if (imageReady && !countdownStartedRef.current) {
+      countdownStartedRef.current = true;
+      setCountdown(3);
+    }
+  }, [imageReady]);
+
+  // Countdown tick: 3 -> 2 -> 1 -> null (game start)
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) return;
+    const t = setTimeout(() => {
+      setCountdown((c) => (c !== null && c > 1 ? c - 1 : null));
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  useEffect(() => {
+    // Only run score timer after countdown has finished (not during load or 3-2-1)
+    if (!countdownStartedRef.current || countdown !== null || showGuessUI || isZooming) return;
 
     let animationId: number | null = null;
     let lastTime = performance.now();
@@ -900,7 +920,7 @@ export const App = () => {
     return () => {
       if (animationId !== null) cancelAnimationFrame(animationId);
     };
-  }, [showGuessUI]);
+  }, [countdown, showGuessUI]);
 
   const roundedScore = Math.floor(score);
 
@@ -985,6 +1005,18 @@ export const App = () => {
                 setScore((prev) => (type === 'powerup' ? prev + 500 : Math.max(0, prev - 500)))
               }
             />
+            {/* Countdown overlay: 3, 2, 1 then game starts */}
+            {countdown !== null && countdown > 0 && (
+              <div
+                className="absolute inset-0 z-20 flex items-center justify-center bg-black"
+                aria-live="polite"
+                aria-label={`Countdown ${countdown}`}
+              >
+                <span className="text-white text-8xl font-bold tabular-nums drop-shadow-lg">
+                  {countdown}
+                </span>
+              </div>
+            )}
             {showGuessUI && !isZooming && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-4 z-10">
                 <p className="text-center text-lg font-medium text-white max-w-md">
@@ -1010,8 +1042,8 @@ export const App = () => {
         )}
       </main>
 
-      {/* Bottom: Guess button (during game) or Submit score button (after reveal) */}
-      {imageReady && !showGuessUI && !isZooming && (
+      {/* Bottom: Guess button (during game) or Submit score button (after reveal); hidden during countdown */}
+      {imageReady && countdown === null && !showGuessUI && !isZooming && (
         <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
           <button
             onClick={handleGuessButtonClick}
@@ -1021,7 +1053,7 @@ export const App = () => {
           </button>
         </footer>
       )}
-      {imageReady && isZooming && (
+      {imageReady && countdown === null && isZooming && (
         <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
           <button
             type="button"
