@@ -43,11 +43,13 @@ const ImageCanvas = ({
   isZooming,
   imageUrl,
   onMarkerHit,
+  onEdgeHit,
 }: {
   showGuessUI: boolean;
   isZooming: boolean;
   imageUrl: string;
   onMarkerHit?: (type: 'obstacle' | 'powerup') => void;
+  onEdgeHit?: () => void;
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLDivElement | null>(null);
@@ -373,6 +375,7 @@ const ImageCanvas = ({
           vx = -vx * bounceDamping;
           if (!edgeHit) {
             setEdgeHit(true);
+            onEdgeHit?.();
             if (edgeHitTimeoutRef.current !== null) {
               window.clearTimeout(edgeHitTimeoutRef.current);
             }
@@ -383,6 +386,7 @@ const ImageCanvas = ({
           vx = -vx * bounceDamping;
           if (!edgeHit) {
             setEdgeHit(true);
+            onEdgeHit?.();
             if (edgeHitTimeoutRef.current !== null) {
               window.clearTimeout(edgeHitTimeoutRef.current);
             }
@@ -396,6 +400,7 @@ const ImageCanvas = ({
           vy = -vy * bounceDamping;
           if (!edgeHit) {
             setEdgeHit(true);
+            onEdgeHit?.();
             if (edgeHitTimeoutRef.current !== null) {
               window.clearTimeout(edgeHitTimeoutRef.current);
             }
@@ -406,6 +411,7 @@ const ImageCanvas = ({
           vy = -vy * bounceDamping;
           if (!edgeHit) {
             setEdgeHit(true);
+            onEdgeHit?.();
             if (edgeHitTimeoutRef.current !== null) {
               window.clearTimeout(edgeHitTimeoutRef.current);
             }
@@ -856,6 +862,20 @@ export const App = () => {
   /** Countdown before gameplay: 3, 2, 1 then null (game starts). Starts once when image is ready. */
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownStartedRef = useRef(false);
+  /** Popups shown below score: "+100" (blue) / "-100" (red), auto-removed after delay */
+  const [scorePopups, setScorePopups] = useState<{ id: number; text: string; color: 'red' | 'blue' }[]>([]);
+  const popupIdRef = useRef(0);
+  const popupTimeoutsRef = useRef<number[]>([]);
+
+  const addScorePopup = (text: string, color: 'red' | 'blue') => {
+    const id = ++popupIdRef.current;
+    setScorePopups((prev) => [...prev, { id, text, color }]);
+    const t = window.setTimeout(() => {
+      setScorePopups((prev) => prev.filter((p) => p.id !== id));
+      popupTimeoutsRef.current = popupTimeoutsRef.current.filter((x) => x !== t);
+    }, 900);
+    popupTimeoutsRef.current.push(t);
+  };
 
   const handleGuessButtonClick = () => {
     setShowGuessUI(true);
@@ -949,24 +969,52 @@ export const App = () => {
   };
 
   return (
-    <div className={`flex flex-col ${APP_THEME.rootClassName}`} style={rootStyle}>
-      {/* Top bar: score only */}
-      <header className="px-4 py-3 flex items-center justify-center">
+    <div className={`flex flex-col relative ${APP_THEME.rootClassName}`} style={rootStyle}>
+      {/* Full-screen countdown overlay: covers entire screen including score */}
+      {imageReady && countdown !== null && countdown > 0 && (
+        <div
+          className="fixed inset-0 z-30 flex items-center justify-center bg-black"
+          aria-live="polite"
+          aria-label={`Countdown ${countdown}`}
+        >
+          <span className="text-white text-8xl font-bold tabular-nums drop-shadow-lg">
+            {countdown}
+          </span>
+        </div>
+      )}
+      {/* Top bar: score and +/- popups */}
+      <header className="px-4 py-1.5 flex flex-col items-center justify-center relative">
         <div className="flex flex-col items-center">
           <span className="text-xs uppercase tracking-wide text-gray-400">Score</span>
           <span className="text-2xl font-semibold leading-tight tabular-nums">{roundedScore}</span>
+        </div>
+        <div className="flex flex-col items-center gap-0.5 mt-0.5 min-h-[1.25rem]">
+          {scorePopups.map((p) => (
+            <span
+              key={p.id}
+              className={`text-lg font-bold tabular-nums ${
+                p.color === 'red' ? 'text-red-400' : 'text-blue-400'
+              }`}
+              style={{
+                textShadow: '0 0 4px rgba(0,0,0,0.8)',
+                animation: 'score-popup 0.9s ease-out forwards',
+              }}
+            >
+              {p.text}
+            </span>
+          ))}
         </div>
       </header>
 
       {/* Reveal message: between score and canvas */}
       {isZooming && (
-        <div className="px-4 py-2 flex justify-center">
+        <div className="px-4 py-1 flex justify-center">
           <p className="text-center text-lg font-medium text-white max-w-md">{revealMessage}</p>
         </div>
       )}
 
       {/* Main: show only Loading or error until image is ready; then show canvas */}
-      <main className="flex-1 flex items-center justify-center px-4 pb-4 relative">
+      <main className="flex-1 flex items-center justify-center px-4 pb-2 pt-0 relative min-h-0">
         {!imageReady && (
           <div className="flex flex-col items-center justify-center gap-3 text-center px-4">
             {loading && <p className="text-sm text-gray-400">Loading...</p>}
@@ -1001,22 +1049,17 @@ export const App = () => {
               showGuessUI={showGuessUI}
               isZooming={isZooming}
               imageUrl={imageUrl}
-              onMarkerHit={(type) =>
-                setScore((prev) => (type === 'powerup' ? prev + 500 : Math.max(0, prev - 500)))
-              }
+              onMarkerHit={(type) => {
+                if (type === 'powerup') {
+                  setScore((prev) => prev + 500);
+                  addScorePopup('+100', 'blue');
+                } else {
+                  setScore((prev) => Math.max(0, prev - 500));
+                  addScorePopup('-100', 'red');
+                }
+              }}
+              onEdgeHit={() => addScorePopup('-100', 'red')}
             />
-            {/* Countdown overlay: 3, 2, 1 then game starts */}
-            {countdown !== null && countdown > 0 && (
-              <div
-                className="absolute inset-0 z-20 flex items-center justify-center bg-black"
-                aria-live="polite"
-                aria-label={`Countdown ${countdown}`}
-              >
-                <span className="text-white text-8xl font-bold tabular-nums drop-shadow-lg">
-                  {countdown}
-                </span>
-              </div>
-            )}
             {showGuessUI && !isZooming && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-4 z-10">
                 <p className="text-center text-lg font-medium text-white max-w-md">
@@ -1044,7 +1087,7 @@ export const App = () => {
 
       {/* Bottom: Guess button (during game) or Submit score button (after reveal); hidden during countdown */}
       {imageReady && countdown === null && !showGuessUI && !isZooming && (
-        <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
+        <footer className="mt-auto w-full px-4 pb-4 pt-2 bg-gradient-to-t from-black to-black/60">
           <button
             onClick={handleGuessButtonClick}
             className="w-full h-12 rounded-full bg-[#d93900] text-white font-semibold text-base shadow-lg active:scale-[0.97] transition-transform"
@@ -1054,7 +1097,7 @@ export const App = () => {
         </footer>
       )}
       {imageReady && countdown === null && isZooming && (
-        <footer className="mt-auto w-full px-4 pb-6 pt-3 bg-gradient-to-t from-black to-black/60">
+        <footer className="mt-auto w-full px-4 pb-4 pt-2 bg-gradient-to-t from-black to-black/60">
           <button
             type="button"
             onClick={handleSubmitScore}
