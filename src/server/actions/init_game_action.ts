@@ -35,18 +35,31 @@ export const initGameAction = (router: Router): void => {
         const levelName = postData.levelName;
 
         // Prefer game data embedded in the post (manual "Post a level" flow). No Redis needed.
-        const embeddedLevelData = postData.levelData ?? postData.imageUrl;
+        // Support both camelCase and snake_case in case postData is serialized differently.
+        const embeddedLevelData =
+          postData.levelData ??
+          postData.imageUrl ??
+          (postData as Record<string, unknown>).level_data ??
+          (postData as Record<string, unknown>).image_url;
         const embeddedLevelDataStr = typeof embeddedLevelData === 'string' ? embeddedLevelData : '';
         if (embeddedLevelDataStr.length > 0) {
-          const answer = postData.answer;
-          const celebrityName = postData.celebrityName;
+          const answer =
+            postData.answer ??
+            (postData as Record<string, unknown>).answer;
+          const celebrityName =
+            postData.celebrityName ??
+            (postData as Record<string, unknown>).celebrity_name;
+          const answerStr = typeof answer === 'string' ? answer : answer != null ? String(answer) : '';
+          const celebrityNameStr =
+            typeof celebrityName === 'string' ? celebrityName : celebrityName != null ? String(celebrityName) : '';
           res.json({
             type: 'init',
             levelName,
             levelData: embeddedLevelDataStr,
+            imageUrl: embeddedLevelDataStr,
             username: username ?? 'anonymous',
-            ...(typeof answer === 'string' && { answer }),
-            ...(typeof celebrityName === 'string' && { celebrityName }),
+            ...(answerStr && { answer: answerStr }),
+            ...(celebrityNameStr && { celebrityName: celebrityNameStr }),
           });
           return;
         }
@@ -59,6 +72,7 @@ export const initGameAction = (router: Router): void => {
             type: 'init',
             levelName,
             levelData: legacyData,
+            imageUrl: legacyData,
             username: username ?? 'anonymous',
           });
           return;
@@ -82,6 +96,7 @@ export const initGameAction = (router: Router): void => {
           type: 'init',
           levelName,
           levelData,
+          imageUrl: levelData,
           username: username ?? 'anonymous',
           ...(typeof answer === 'string' && { answer }),
           ...(typeof celebrityName === 'string' && { celebrityName }),

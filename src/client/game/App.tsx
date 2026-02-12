@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { context } from '@devvit/web/client';
 import { APP_THEME } from '../theme';
 
 type InitResponse = {
   type: 'init';
   levelName: string;
   levelData: string;
+  imageUrl?: string;
   username: string;
   answer?: string;
   celebrityName?: string;
@@ -597,6 +599,40 @@ const ImageCanvas = ({
   );
 };
 
+/** Read level data from post context when app is running inside a custom post (so image loads without relying on init API). */
+function getLevelDataFromPostContext(): {
+  levelName: string | null;
+  levelData: string | null;
+  answer: string | null;
+  celebrityName: string | null;
+} {
+  try {
+    const ctx = typeof context !== 'undefined' ? context : null;
+    const pd = (ctx as { postData?: Record<string, unknown> } | null)?.postData;
+    if (!pd || typeof pd !== 'object') return { levelName: null, levelData: null, answer: null, celebrityName: null };
+    const levelName =
+      (typeof pd.levelName === 'string' ? pd.levelName : null) ??
+      (typeof (pd as Record<string, unknown>).level_name === 'string' ? (pd as Record<string, unknown>).level_name as string : null);
+    const levelDataRaw =
+      pd.levelData ?? pd.imageUrl ?? (pd as Record<string, unknown>).level_data ?? (pd as Record<string, unknown>).image_url;
+    const levelData =
+      typeof levelDataRaw === 'string' && levelDataRaw.trim()
+        ? levelDataRaw.trim()
+        : null;
+    const answer =
+      (typeof pd.answer === 'string' ? pd.answer : null) ??
+      (typeof (pd as Record<string, unknown>).answer === 'string' ? (pd as Record<string, unknown>).answer as string : null);
+    const celebrityName =
+      (typeof pd.celebrityName === 'string' ? pd.celebrityName : null) ??
+      (typeof (pd as Record<string, unknown>).celebrity_name === 'string' ? (pd as Record<string, unknown>).celebrity_name as string : null);
+    return { levelName: levelName ?? null, levelData, answer, celebrityName };
+  } catch {
+    return { levelName: null, levelData: null, answer: null, celebrityName: null };
+  }
+}
+
+const initialPostContext = getLevelDataFromPostContext();
+
 export const App = () => {
   const [initState, setInitState] = useState<{
     levelName: string | null;
@@ -607,11 +643,11 @@ export const App = () => {
     loading: boolean;
     error: boolean;
   }>({
-    levelName: null,
-    levelData: null,
+    levelName: initialPostContext.levelName,
+    levelData: initialPostContext.levelData,
     username: null,
-    answer: null,
-    celebrityName: null,
+    answer: initialPostContext.answer,
+    celebrityName: initialPostContext.celebrityName,
     loading: true,
     error: false,
   });
@@ -630,20 +666,20 @@ export const App = () => {
     const init = async () => {
       try {
         console.log('[App] calling /api/init');
-        const res = await fetch('/api/init');
-        console.log('[App] init response', res.status);
+        const res = await fetch('/api/init', { credentials: 'include' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: InitResponse = await res.json();
         if (data.type !== 'init') throw new Error('Unexpected response');
-        setInitState({
-          levelName: data.levelName,
-          levelData: data.levelData,
+        const imageUrlFromInit = (data.levelData ?? data.imageUrl ?? '').trim() || null;
+        setInitState((prev) => ({
+          levelName: prev.levelName ?? (data.levelName || null),
+          levelData: prev.levelData ?? imageUrlFromInit,
           username: data.username,
-          answer: typeof data.answer === 'string' ? data.answer : null,
-          celebrityName: typeof data.celebrityName === 'string' ? data.celebrityName : null,
+          answer: prev.answer ?? (typeof data.answer === 'string' ? data.answer : null),
+          celebrityName: prev.celebrityName ?? (typeof data.celebrityName === 'string' ? data.celebrityName : null),
           loading: false,
           error: false,
-        });
+        }));
       } catch (err) {
         console.error('Failed to init', err);
         setInitState((prev) => ({ ...prev, loading: false, error: true }));
