@@ -27,19 +27,21 @@ export const formAction = (router: Router): void => {
   
     try {
       const body = req.body ?? {};
+      const rawLevelName = body.levelName ?? body.form?.levelName;
       const keyToRemove =
-        typeof body.levelName === 'string'
-          ? body.levelName
-          : typeof body.form?.levelName === 'string'
-            ? body.form.levelName
-            : undefined;
+        typeof rawLevelName === 'string'
+          ? rawLevelName.trim()
+          : Array.isArray(rawLevelName) && rawLevelName[0] != null
+            ? String(rawLevelName[0]).trim()
+            : '';
 
       if (keyToRemove) {
-        await redis.hDel(QUEUE_KEY, [
+        const fieldsToRemove = [
           keyToRemove,
           `${keyToRemove}_originalLink`,
           `${keyToRemove}_license`,
-        ]);
+        ];
+        await redis.hDel(QUEUE_KEY, fieldsToRemove);
       }
       res.status(200).json({
         showToast: { text: 'Level removed from the queue.' },
