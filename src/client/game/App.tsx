@@ -8,6 +8,7 @@ type InitResponse = {
   levelData: string;
   imageUrl?: string;
   username: string;
+  postId?: string;
   answer?: string;
   celebrityName?: string;
 };
@@ -670,6 +671,7 @@ export const App = () => {
     levelName: string | null;
     levelData: string | null;
     username: string | null;
+    postId: string | null;
     answer: string | null;
     celebrityName: string | null;
     loading: boolean;
@@ -678,6 +680,7 @@ export const App = () => {
     levelName: initialPostContext.levelName,
     levelData: initialPostContext.levelData,
     username: null,
+    postId: null,
     answer: initialPostContext.answer,
     celebrityName: initialPostContext.celebrityName,
     loading: true,
@@ -707,6 +710,7 @@ export const App = () => {
           levelName: prev.levelName ?? (data.levelName || null),
           levelData: prev.levelData ?? imageUrlFromInit,
           username: data.username,
+          postId: typeof data.postId === 'string' ? data.postId : null,
           answer: prev.answer ?? (typeof data.answer === 'string' ? data.answer : null),
           celebrityName: prev.celebrityName ?? (typeof data.celebrityName === 'string' ? data.celebrityName : null),
           loading: false,
@@ -859,6 +863,7 @@ export const App = () => {
   const [userGuess, setUserGuess] = useState<'Delulu' | 'Celulu' | null>(null);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
   const [scoreSubmitting, setScoreSubmitting] = useState(false);
+  const [alreadySubmittedForPost, setAlreadySubmittedForPost] = useState(false);
   /** Countdown before gameplay: 3, 2, 1 then null (game starts). Starts once when image is ready. */
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownStartedRef = useRef(false);
@@ -963,10 +968,18 @@ export const App = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ username, score: roundedScore }),
+        body: JSON.stringify({
+          username,
+          score: roundedScore,
+          ...(initState.postId && { postId: initState.postId }),
+        }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) setScoreSubmitted(true);
+      if (data.alreadySubmitted) {
+        setAlreadySubmittedForPost(true);
+      } else if (res.ok && data.ok) {
+        setScoreSubmitted(true);
+      }
     } finally {
       setScoreSubmitting(false);
     }
@@ -1105,14 +1118,16 @@ export const App = () => {
           <button
             type="button"
             onClick={handleSubmitScore}
-            disabled={scoreSubmitted || scoreSubmitting}
+            disabled={scoreSubmitted || scoreSubmitting || alreadySubmittedForPost}
             className="w-full h-12 rounded-full bg-[#d93900] text-white font-semibold text-base shadow-lg disabled:opacity-60 disabled:pointer-events-none active:scale-[0.97] transition-transform"
           >
             {scoreSubmitting
               ? 'Submitting…'
-              : scoreSubmitted
-                ? 'Score submitted!'
-                : 'Submit score'}
+              : alreadySubmittedForPost
+                ? 'Already submitted for this post'
+                : scoreSubmitted
+                  ? 'Score submitted!'
+                  : 'Submit score'}
           </button>
         </footer>
       )}

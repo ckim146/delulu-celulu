@@ -29,15 +29,25 @@ router.get('/api/ping', (_req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/submit-score — add username and score to leaderboard (Redis sorted set for high scores)
+// POST /api/submit-score — add username and score to leaderboard (one submission per user per post)
 router.post('/api/submit-score', async (req, res) => {
   try {
     const body = req.body ?? {};
     const username = typeof body.username === 'string' ? body.username.trim() : '';
     const gameScore = typeof body.score === 'number' ? body.score : Number(body.score);
+    const postId = typeof body.postId === 'string' ? body.postId.trim() : '';
     if (!username || Number.isNaN(gameScore)) {
       res.status(400).json({ ok: false, error: 'Missing or invalid username or score' });
       return;
+    }
+    if (postId) {
+      const key = `post:${postId}:submitted`;
+      const submitted = await redis.hGetAll(key);
+      if (submitted && Object.prototype.hasOwnProperty.call(submitted, username)) {
+        res.json({ ok: false, alreadySubmitted: true });
+        return;
+      }
+      await redis.hSet(key, { [username]: '1' });
     }
     await redis.zAdd('leaderboard', {
       member: username,

@@ -17,18 +17,24 @@ export const initGameAction = (router: Router): void => {
 
       try {
         const { postData } = context;
+        const postId = typeof (context as { postId?: string }).postId === 'string' ? (context as { postId: string }).postId : undefined;
         const username = await reddit.getCurrentUsername();
         console.log('[init] postData', postData);
+
+        const initPayload = (payload: Record<string, unknown>) => ({
+          ...payload,
+          ...(postId && { postId }),
+        });
 
         // If no level identifier in post context (e.g. post created via "Create a new post"), return safe default
         if (!postData?.levelName || typeof postData.levelName !== 'string') {
           logger.info('API Init: no postData.levelName, returning default init');
-          res.json({
+          res.json(initPayload({
             type: 'init',
             levelName: '',
             levelData: '',
             username: username ?? 'anonymous',
-          });
+          }));
           return;
         }
 
@@ -52,7 +58,7 @@ export const initGameAction = (router: Router): void => {
           const answerStr = typeof answer === 'string' ? answer : answer != null ? String(answer) : '';
           const celebrityNameStr =
             typeof celebrityName === 'string' ? celebrityName : celebrityName != null ? String(celebrityName) : '';
-          res.json({
+          res.json(initPayload({
             type: 'init',
             levelName,
             levelData: embeddedLevelDataStr,
@@ -60,7 +66,7 @@ export const initGameAction = (router: Router): void => {
             username: username ?? 'anonymous',
             ...(answerStr && { answer: answerStr }),
             ...(celebrityNameStr && { celebrityName: celebrityNameStr }),
-          });
+          }));
           return;
         }
 
@@ -68,13 +74,13 @@ export const initGameAction = (router: Router): void => {
         const levelKey = `level:${levelName}`;
         const legacyData = await redis.get(levelKey);
         if (typeof legacyData === 'string' && legacyData.length > 0) {
-          res.json({
+          res.json(initPayload({
             type: 'init',
             levelName,
             levelData: legacyData,
             imageUrl: legacyData,
             username: username ?? 'anonymous',
-          });
+          }));
           return;
         }
         const levelHash = await redis.hGetAll(levelKey);
@@ -82,17 +88,17 @@ export const initGameAction = (router: Router): void => {
         const levelData = typeof imageUrl === 'string' ? imageUrl : imageUrl != null ? String(imageUrl) : '';
         if (!levelData) {
           logger.info('API Init: no level data in redis for levelName, returning default init');
-          res.json({
+          res.json(initPayload({
             type: 'init',
             levelName,
             levelData: '',
             username: username ?? 'anonymous',
-          });
+          }));
           return;
         }
         const answer = levelHash['answer'] ?? levelHash.answer;
         const celebrityName = levelHash['celebrityName'] ?? levelHash.celebrityName;
-        res.json({
+        res.json(initPayload({
           type: 'init',
           levelName,
           levelData,
@@ -100,7 +106,7 @@ export const initGameAction = (router: Router): void => {
           username: username ?? 'anonymous',
           ...(typeof answer === 'string' && { answer }),
           ...(typeof celebrityName === 'string' && { celebrityName }),
-        });
+        }));
 
         /* ========== End Focus - Fetch from redis + return result ========== */
 
